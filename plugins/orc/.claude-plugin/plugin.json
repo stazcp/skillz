@@ -1,6 +1,6 @@
 {
   "name": "orc",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Orchestrator: route each piece on output volume, not work size. Small-output actions stay in the main session; anything returning more than a screen goes to the cheapest tier agent or a Workflow under a return contract, so the main context lasts for weeks.",
   "author": { "name": "Staz Christodoulakis", "url": "https://staz.ai" },
   "homepage": "https://github.com/stazcp/skillz",

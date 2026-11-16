@@ -37,7 +37,7 @@ Workflow rules: stage roles from the tier table, cheaper in wide stages since co
 
 | Tier | Model, effort | For |
 |---|---|---|
-| orc:tier-cheap (experimental) | Haiku, low | Read-heavy lookups; named commands digested; finder stages. Never edits, git, `gh` or Slack. Confidently incomplete: check before its answer feeds an edit. |
+| orc:tier-cheap (experimental) | Haiku, medium (low for a named command digested to pass/fail; high for a finder stage where a miss is costly) | Read-heavy lookups; named commands digested; finder stages. Never edits, git, `gh` or Slack. Confidently incomplete: check before its answer feeds an edit. |
 | orc:tier-fast | Sonnet, low | Mechanical, well-specified changes in any number of files (renames, obvious edits, test or build digests); mechanical stages. |
 | orc:tier-strong | Opus, medium | Changes needing reasoning across files: a spec, debugging with a clear goal and repro; transform stages. |
 | orc:tier-max | your model, high | Unclear goal, no repro, costly-mistake work; judge, verify and refute stages. |
@@ -46,7 +46,9 @@ Workflow rules: stage roles from the tier table, cheaper in wide stages since co
 
 Pick the lowest row that fits, on reasoning needed, not file count. On Opus, tier-max is Opus; costly-mistake work dispatches tier-max with `model: "fable"` (asked once, see Asking); an unknown cause, even in costly-mistake work, gets tier-max on Opus first, Fable only after it returns `STUCK:`. Never Fable as the first attempt at a clear task. If a Fable dispatch is refused, tier-max on the session model is the top.
 
-`effort` overrides a tier's default; say so in the brief. Down one step (strong or max only) for wide but shallow work; up one step after a failed attempt or when a fix must hold under load; up a tier when judgment is lacking, which effort does not buy.
+**Effort per dispatch.** The tier default is the start; adjust `effort` to the task, silently, and say so in the brief. Down one step (never below low) for shallow, mechanical, or wide but shallow work; up one step for subtle or high-stakes work, after a failed attempt, or when a fix must hold under load; up a tier when judgment is lacking, which effort does not buy. An effort the user names ("at max", "low effort is fine", "run everything at high") beats both, for that dispatch, or all session if they said so.
+
+**Main-session effort** comes from settings or `/effort`: you cannot change it and may not know it exactly. When the work in front of you is clearly far from typical (hard, high-stakes or long debugging; or a long run of trivial mechanical work), say once, in one line, that `/effort <level>` would suit it, then carry on. Never repeat it for the same kind of work this session, nor after the user just set or overrode it; a `/effort` the user set is the session's level, never argued with.
 
 **Costly-mistake work** (security, data loss, concurrency, hard-to-undo design) is done where its volume puts it (a five-line fix stays inline), but before it is committed or acted on, 2-3 independent orc:tier-max refuters on the session's model try to break the conclusion, returning holds/refuted plus the strongest reason; cheap or fast tiers only re-run a repro a refuter names. Refute only findings that would trigger an edit, a deletion or a security conclusion; drop what fails and say so. Hard-to-undo design is drafted by tier-max under a return contract (under 15 lines plus a file list), refuted the same way, then adopted: you decide, you do not draft.
 
@@ -67,6 +69,7 @@ Routine routing is silent. Workflow authorization comes from the user's CLAUDE.m
 - A Workflow without standing authorization.
 - The first dispatch on a model stronger than the session's; a yes stands all session for that class of work (costly-mistake, or an Opus tier that got stuck), a no is not asked again. Already on the top model, tier-max needs no question.
 - A shape that could go either way where the difference matters (one Agent versus a Workflow of twelve).
+- Effort, only when it matters and the user has not named one: a dispatch you would run at `xhigh` or `max` (cost), or costly-mistake work where effort and tier trade off. Fold it into a question already being asked.
 
 Recommended option first, marked "(Recommended)"; include "Do it here" when reasonable and "Workflow (~N agents)" when relevant. Never repeat a declined suggestion for similar work; a declined Workflow runs as 2-4 Agent rounds, or inline when small.
 

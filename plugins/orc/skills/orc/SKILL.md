@@ -38,8 +38,9 @@ Say once, in one line, that orc routing is on. Then carry on with the work.
 question. If the task is an inline-by-rule action (push, commit, PR, `gh`,
 Slack, a small edit), do it here and say in one line that it stayed inline.
 Ask only when the rules themselves say to: a Workflow without standing
-authorization, the first dispatch on a model stronger than the session's, or
-a shape that could go either way where the difference matters.
+authorization, the first dispatch on a model stronger than the session's, a
+shape that could go either way where the difference matters, or effort for an
+`xhigh`/`max` or costly-mistake dispatch. An effort the user names wins.
 
 "orc off" ends it: say so in one line and behave as a plain session for the
 rest of the session. "orc on" restores it. Nothing persists; a new session

@@ -45,12 +45,17 @@ over long sessions.
 
 | Agent | Model, effort | For |
 |---|---|---|
-| `orc:tier-cheap` (experimental) | Haiku | Lookups, and mechanical commands where the exact command is given. Never edits. |
+| `orc:tier-cheap` (experimental) | Haiku, medium (low for a pass/fail command digest, high for a finder where a miss is costly) | Lookups, and mechanical commands where the exact command is given. Never edits. |
 | `orc:tier-fast` | Sonnet, low | One or two files, an obvious change, a summary |
 | `orc:tier-strong` | Opus, medium | Several files, debugging with a repro, tests |
 | `orc:tier-max` | your session's model, high | Unclear goal, no repro, or high stakes |
 | `orc:tier-strong-wide`, `orc:tier-max-wide` | as above | Same, but may fan out to lower tiers and to parallel searches |
 | `orc:tier-all-out` | your session's model, max | Only when you ask for it |
+
+Effort starts at the tier's default and is adjusted to each task. orc asks
+only for `xhigh`/`max` or high-stakes dispatches, and may suggest `/effort`
+once when the work is far from typical. Name an effort ("at max", "run
+everything at high") and it wins.
 
 Start your session on Opus, or on Fable if your account has it. Each subagent
 starts cold, with roughly 15–25k tokens of context, so orc keeps small and
