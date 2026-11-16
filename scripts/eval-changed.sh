@@ -93,12 +93,16 @@ vault_paths() {
   echo "$BRAIN_DIR"
   for spec in "$BRAIN_DIR"/*.md "$BRAIN_DIR"/*/brain.md; do
     [ -f "$spec" ] || continue
-    case "$(basename "$spec")" in TEMPLATE*|vault-template.md) continue ;; esac
+    # Templates are named TEMPLATE*.md or live in TEMPLATE/brain.md.
+    case "$(basename "$(dirname "$spec")")/$(basename "$spec")" in
+      TEMPLATE/*|*/TEMPLATE*|*/vault-template.md) continue ;;
+    esac
     path="$(sed -n 's/.*\*\*Path\*\*:[[:space:]]*`\{0,1\}\([^`]*\)`\{0,1\}.*/\1/p' "$spec" | head -1)"
     [ -n "$path" ] || continue
     case "$path" in "~"*) path="$HOME${path#\~}" ;; esac
     path="${path%/}"
-    [ -d "$path" ] && echo "$path"
+    # if, not &&: a missing last path must not fail the loop (pipefail + set -e).
+    if [ -d "$path" ]; then echo "$path"; fi
   done | sort -u
 }
 snapshot_vaults() {  # $1 = before|after; one file per vault, so a change names its vault
