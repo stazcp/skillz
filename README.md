@@ -163,7 +163,7 @@ pass `--scaffold`:
 ```sh
 claude plugin eval plugins/orc --scaffold --runs 1
 claude plugin eval plugins/standup --scaffold --runs 1 --allow-tools Bash
-claude plugin eval plugins/coach --scaffold --runs 1 --allow-tools Bash
+claude plugin eval plugins/coach --scaffold --runs 1 --allow-tools Write Edit Bash
 claude plugin eval plugins/review-pr --scaffold --runs 1 --allow-tools "Bash(git *)"
 ```
 
@@ -179,8 +179,8 @@ fixtures have the same guard.
 (`--runs 1 --ablation none`), a per-plugin cost cap and one rerun of each
 failing case. `--all` runs every plugin, `--base <ref>` changes the base,
 `--max-cost-usd <usd>` sets the cap (default 3), `--dry-run` prints the
-commands. Locally it also snapshots your real brain vaults around the brain
-and presentation suites and stops if one changed. A pass on a clean tree
+commands. Locally it also snapshots your real brain vaults around the brain,
+presentation and coach suites and stops if one changed. A pass on a clean tree
 writes `$(git rev-parse --git-common-dir)/evals-passed/<HEAD sha>`. CI runs the
 same script as the `evals` check on every PR (needs the `CLAUDE_CODE_OAUTH_TOKEN`
 secret).

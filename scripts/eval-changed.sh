@@ -69,11 +69,11 @@ fi
 
 # ---------- per-plugin tool grants ----------
 # Path-scoped Write grants are denied inside eval runs, so grants are bare.
-# brain's cases list Write, Edit and Bash; Bash runs under the eval OS sandbox.
+# brain's and coach's cases list Write, Edit and Bash; Bash runs under the eval OS sandbox.
 grants_for() {
   case "$1" in
     standup)      GRANTS=(Bash) ;;  # reads notes with one chained command; prefix grants deny it
-    coach)        GRANTS=(Bash) ;;  # greps the fixture vault; opening turns write nothing
+    coach)        GRANTS=(Write Edit Bash) ;;  # greps the fixture vault; a wrap-up saves the session through brain
     review-pr)    GRANTS=("Bash(git *)") ;;
     presentation) GRANTS=(Write) ;;
     brain)        GRANTS=(Write Edit Bash) ;;
@@ -81,7 +81,7 @@ grants_for() {
     *)            GRANTS=() ;;
   esac
 }
-writes_files() { [ "$1" = brain ] || [ "$1" = presentation ]; }
+writes_files() { [ "$1" = brain ] || [ "$1" = presentation ] || [ "$1" = coach ]; }
 
 # ---------- real brain vault guard (local only) ----------
 TMPBASE="${TMPDIR:-/tmp}"; TMPBASE="${TMPBASE%/}"

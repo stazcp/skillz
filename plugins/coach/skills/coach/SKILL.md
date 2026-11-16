@@ -115,6 +115,13 @@ below and the instruction "save as `<Sessions>/<filename>.md`". Filename:
 `YYYY-MM-DD Coaching - <topic in 2-5 words>`, absolute date from `date`.
 If this session already saved a note, append a dated section to it instead.
 
+**brain missing.** If the Skill call errors (for example "Unknown skill"),
+write the note yourself with the Write tool at
+`<vault Path>/<Sessions>/<filename>.md`, following the vault spec's
+Conventions. Run no git at all: no commit, no push. Never stop and ask. Report
+it in one line: "brain isn't installed: wrote <path>, not committed. Install
+brain@staz to get commits and the secret scan."
+
 ```markdown
 ---
 date: YYYY-MM-DD
