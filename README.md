@@ -10,6 +10,7 @@ Claude Code plugins I use every day, for personal and work projects.
 /plugin install review-pr@staz
 /plugin install presentation@staz
 /plugin install standup@staz
+/plugin install coach@staz
 ```
 
 ## orc
@@ -132,6 +133,26 @@ can see what is solid. It writes one self-contained file and never publishes.
 activity (PRs, issues, commits). Plain text to read out or paste; it never
 posts.
 
+## coach
+
+`/coach` is a career coach with memory. Before it says anything it reads your
+career notes and your last three coaching sessions from your brain vault.
+It opens by asking about last time's commitments, asks questions before it
+gives advice, gives a straight opinion when you ask "wdyt", and holds you to
+your own stated goals. When you're done it saves the session (what came up,
+decisions, dated commitments) back to the vault through brain.
+
+| | |
+|---|---|
+| `/coach [topic]` | A session: decisions, mock interviews, negotiation role-play, promotion, check-ins |
+| `/coach review` | Patterns across sessions: commitments kept, recurring themes, what's stuck |
+| `/coach --setup` | Pick the vault, the standing career notes and the sessions folder |
+
+Say "off the record" at any point and nothing is saved. Its config is
+`coach.md` in `$SKILLZ_CONTEXT` (default `~/.config/skillz`); see
+[`coach-template.md`](plugins/coach/skills/coach/coach-template.md). It needs
+brain set up first.
+
 ## Evals
 
 Each plugin has a `claude plugin eval` suite under `plugins/<name>/evals/`
@@ -142,6 +163,7 @@ pass `--scaffold`:
 ```sh
 claude plugin eval plugins/orc --scaffold --runs 1
 claude plugin eval plugins/standup --scaffold --runs 1 --allow-tools Bash
+claude plugin eval plugins/coach --scaffold --runs 1 --allow-tools Write Edit Bash
 claude plugin eval plugins/review-pr --scaffold --runs 1 --allow-tools "Bash(git *)"
 ```
 
@@ -157,8 +179,8 @@ fixtures have the same guard.
 (`--runs 1 --ablation none`), a per-plugin cost cap and one rerun of each
 failing case. `--all` runs every plugin, `--base <ref>` changes the base,
 `--max-cost-usd <usd>` sets the cap (default 3), `--dry-run` prints the
-commands. Locally it also snapshots your real brain vaults around the brain
-and presentation suites and stops if one changed. A pass on a clean tree
+commands. Locally it also snapshots your real brain vaults around the brain,
+presentation and coach suites and stops if one changed. A pass on a clean tree
 writes `$(git rev-parse --git-common-dir)/evals-passed/<HEAD sha>`. CI runs the
 same script as the `evals` check on every PR (needs the `CLAUDE_CODE_OAUTH_TOKEN`
 secret).
