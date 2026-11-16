@@ -73,6 +73,7 @@ fi
 grants_for() {
   case "$1" in
     standup)      GRANTS=(Bash) ;;  # reads notes with one chained command; prefix grants deny it
+    coach)        GRANTS=(Bash) ;;  # greps the fixture vault; opening turns write nothing
     review-pr)    GRANTS=("Bash(git *)") ;;
     presentation) GRANTS=(Write) ;;
     brain)        GRANTS=(Write Edit Bash) ;;

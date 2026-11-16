@@ -32,6 +32,11 @@
       "name": "standup",
       "source": "./plugins/standup",
       "description": "A Yesterday / Today / Blockers standup report from your real GitHub activity. Plain text to read out or paste; never posts."
+    },
+    {
+      "name": "coach",
+      "source": "./plugins/coach",
+      "description": "A career coach with memory: reads your career notes and past sessions from your brain vault, checks last session's commitments, coaches question-first with a straight opinion when asked, and saves each session back to the vault."
     }
   ]
 }

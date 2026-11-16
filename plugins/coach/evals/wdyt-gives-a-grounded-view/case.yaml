@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: wdyt-gives-a-grounded-view
+context:
+  scaffold_script: fixture.sh
