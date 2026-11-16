@@ -38,6 +38,10 @@ Then read, quietly and in full:
 Never paste or summarize these notes back to the user. They already wrote
 them. Use them.
 
+Read them yourself, never through a subagent or a handoff, even when the
+session's own rules (an orchestrator, say) would send a multi-file read out.
+A summary loses the detail that makes a coach with memory useful.
+
 ## 1. Open
 
 One short message, then wait for the answer:

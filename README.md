@@ -147,6 +147,14 @@ decisions, dated commitments) back to the vault through brain.
 | `/coach [topic]` | A session: decisions, mock interviews, negotiation role-play, promotion, check-ins |
 | `/coach review` | Patterns across sessions: commitments kept, recurring themes, what's stuck |
 | `/coach --setup` | Pick the vault, the standing career notes and the sessions folder |
+| `claude --agent coach:coach` | A whole session as a coaching session, from the first turn |
+
+`/coach` drops a coach into whatever session you're in. `--agent coach:coach`
+makes the whole session a coaching session: the rules sit in the system
+prompt, so they hold over a long talk, and its tools are limited to files and
+the shell (no web, Slack, GitHub or subagents), so nothing leaves the vault.
+Pass `--setup` or `review` as the first message. A shell alias makes it one
+word: `alias coach='claude --agent coach:coach --model opus'`.
 
 Say "off the record" at any point and nothing is saved. Its config is
 `coach.md` in `$SKILLZ_CONTEXT` (default `~/.config/skillz`); see
