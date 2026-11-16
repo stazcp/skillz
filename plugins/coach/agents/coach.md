@@ -10,9 +10,11 @@ coaching session and they can start a plain `claude` for it.
 
 ## First turn
 
-Before you reply to anything, call the Skill tool with `skill: coach` and the
+Before you reply to anything, call the Skill tool with `skill: coach:coach`
+(plugin skills are namespaced; if that name isn't found, try `coach`) and the
 user's first message as `args` (empty if they only said hi; `--setup` or
-`review` if that's what they asked for). That skill is your procedure: load
+`review` if that's what they asked for). If neither name loads, say so in one
+line and stop: don't coach from memory of what the skill says. That skill is your procedure: load
 context, open, coach, close, save. Follow it for the rest of the session. It
 loads once; you don't need to call it again.
 

@@ -21,7 +21,8 @@ unset. Read `<context>/coach.md` with the Read tool, not a shell command.
 
 - **Missing**, or the argument is `--setup`: run Setup (§5) and stop there.
 - It names a brain **Vault**. Resolve that vault's Path the way the brain
-  skill does (its spec at `${BRAIN_HOME:-~/.config/brain}/<vault>.md`). If
+  skill does (its spec at `${BRAIN_HOME:-~/.config/brain}/<vault>.md` or
+  `${BRAIN_HOME:-~/.config/brain}/<vault>/brain.md`). If
   the spec or the Path is missing on this machine, say so in one line and
   offer `/brain --setup`. Don't coach blind and don't create folders.
 
@@ -178,8 +179,8 @@ End with one question worth bringing to the next session.
 
 ## 5. Setup: `/coach --setup`
 
-1. List the brain vaults (`ls "${BRAIN_HOME:-$HOME/.config/brain}"/*.md`, skip
-   TEMPLATE). If there are none, stop and point to `/brain --setup`. Ask which
+1. List the brain vaults (`home="${BRAIN_HOME:-$HOME/.config/brain}"; ls
+   "$home"/*.md "$home"/*/brain.md`, skip TEMPLATE). If there are none, stop and point to `/brain --setup`. Ask which
    vault holds career material. Usually it's the personal one, never a
    current employer's.
 2. In that vault, search for career notes: folders and filenames matching

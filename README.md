@@ -152,7 +152,8 @@ decisions, dated commitments) back to the vault through brain.
 `/coach` drops a coach into whatever session you're in. `--agent coach:coach`
 makes the whole session a coaching session: the rules sit in the system
 prompt, so they hold over a long talk, and its tools are limited to files and
-the shell (no web, Slack, GitHub or subagents), so nothing leaves the vault.
+the shell (no web, Slack, GitHub or subagents), so the session goes nowhere
+but the vault (and the vault's own git remote, if brain pushes it).
 Pass `--setup` or `review` as the first message. A shell alias makes it one
 word: `alias coach='claude --agent coach:coach --model opus'`.
 
