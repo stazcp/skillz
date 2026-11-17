@@ -61,7 +61,7 @@ Every brief has all three of these.
 
 **Known facts.** Everything this conversation knows: paths, the repro, what was ruled out, decisions taken.
 
-**Scope stop.** Bigger than briefed: report `STUCK:` rather than widen.
+**Scope stop.** A line in the brief telling the worker: if it is bigger or different than briefed, stop and report `STUCK:` rather than widen.
 
 On return, keep the conclusion; never quote the report into your reasoning. Check an answer with one targeted Read of the claimed `file:line`, never by redoing the search, re-running its queries or reading the diff; a check that needs more is a dispatch.
 
