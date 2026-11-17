@@ -16,13 +16,19 @@ sessions go all come from the coach config.
 
 ## 0. Load context — before the first word
 
-Your context folder is `$SKILLZ_CONTEXT`, or `~/.config/skillz` when that is
-unset. Read `<context>/coach.md` with the Read tool, not a shell command.
+First resolve the two folders to absolute paths. The Read, Write and Glob
+tools expand neither `$VARS` nor `~`, so get them from one shell call:
+
+    echo "${SKILLZ_CONTEXT:-$HOME/.config/skillz}"; echo "${BRAIN_HOME:-$HOME/.config/brain}"
+
+The first line is `<context>`, your context folder; the second is `<home>`,
+the brain home. Use those absolute paths in every tool call below. Then read
+`<context>/coach.md` with the Read tool, not a shell command.
 
 - **Missing**, or the argument is `--setup`: run Setup (§5) and stop there.
 - It names a brain **Vault**. Resolve that vault's Path the way the brain
-  skill does (its spec at `${BRAIN_HOME:-~/.config/brain}/<vault>.md` or
-  `${BRAIN_HOME:-~/.config/brain}/<vault>/brain.md`). If
+  skill does (its spec at `<home>/<vault>.md` or `<home>/<vault>/brain.md`;
+  a Path written with a leading `~` means `$HOME`). If
   the spec or the Path is missing on this machine, say so in one line and
   offer `/brain --setup`. Don't coach blind and don't create folders.
 
@@ -182,8 +188,7 @@ End with one question worth bringing to the next session.
 
 1. List the brain vaults with the Glob tool, not a shell glob (a pattern
    that matches nothing aborts the whole command under zsh): `<home>/*.md`
-   and `<home>/*/brain.md`. Glob expands neither `$VARS` nor `~`, so get
-   `<home>` as an absolute path first: `echo "${BRAIN_HOME:-$HOME/.config/brain}"`.
+   and `<home>/*/brain.md`, with the absolute `<home>` resolved in §0.
    Skip TEMPLATE. If there are none, stop and point to `/brain --setup`. Ask which
    vault holds career material. Usually it's the personal one, never a
    current employer's.

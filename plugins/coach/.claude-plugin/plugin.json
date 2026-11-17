@@ -1,6 +1,6 @@
 {
   "name": "coach",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A career coach with memory: reads your career notes and past sessions from your brain vault, checks last session's commitments, coaches question-first with a straight opinion when asked, and saves each session back to the vault.",
   "author": { "name": "Staz Christodoulakis", "url": "https://staz.ai" },
   "homepage": "https://github.com/stazcp/skillz",
