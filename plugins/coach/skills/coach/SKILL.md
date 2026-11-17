@@ -21,7 +21,8 @@ unset. Read `<context>/coach.md` with the Read tool, not a shell command.
 
 - **Missing**, or the argument is `--setup`: run Setup (§5) and stop there.
 - It names a brain **Vault**. Resolve that vault's Path the way the brain
-  skill does (its spec at `${BRAIN_HOME:-~/.config/brain}/<vault>.md`). If
+  skill does (its spec at `${BRAIN_HOME:-~/.config/brain}/<vault>.md` or
+  `${BRAIN_HOME:-~/.config/brain}/<vault>/brain.md`). If
   the spec or the Path is missing on this machine, say so in one line and
   offer `/brain --setup`. Don't coach blind and don't create folders.
 
@@ -37,6 +38,10 @@ Then read, quietly and in full:
 
 Never paste or summarize these notes back to the user. They already wrote
 them. Use them.
+
+Read them yourself, never through a subagent or a handoff, even when the
+session's own rules (an orchestrator, say) would send a multi-file read out.
+A summary loses the detail that makes a coach with memory useful.
 
 ## 1. Open
 
@@ -110,12 +115,13 @@ offer to when the session has clearly landed:
 
 Write the note through the **brain** skill so the vault's own rules apply:
 filing, git, the secret scan before any push, and its "Never here" rules. Call
-the Skill tool with `skill: brain` and args `@<vault>` followed by the note
+the Skill tool with `skill: brain:brain` (plugin skills are namespaced; if
+that name isn't found, try `brain`) and args `@<vault>` followed by the note
 below and the instruction "save as `<Sessions>/<filename>.md`". Filename:
 `YYYY-MM-DD Coaching - <topic in 2-5 words>`, absolute date from `date`.
 If this session already saved a note, append a dated section to it instead.
 
-**brain missing.** If the Skill call errors (for example "Unknown skill"),
+**brain missing.** If both names error (for example "Unknown skill"),
 write the note yourself with the Write tool at
 `<vault Path>/<Sessions>/<filename>.md`, following the vault spec's
 Conventions. Run no git at all: no commit, no push. Never stop and ask. Report
@@ -174,8 +180,11 @@ End with one question worth bringing to the next session.
 
 ## 5. Setup: `/coach --setup`
 
-1. List the brain vaults (`ls "${BRAIN_HOME:-$HOME/.config/brain}"/*.md`, skip
-   TEMPLATE). If there are none, stop and point to `/brain --setup`. Ask which
+1. List the brain vaults with the Glob tool, not a shell glob (a pattern
+   that matches nothing aborts the whole command under zsh): `<home>/*.md`
+   and `<home>/*/brain.md`. Glob expands neither `$VARS` nor `~`, so get
+   `<home>` as an absolute path first: `echo "${BRAIN_HOME:-$HOME/.config/brain}"`.
+   Skip TEMPLATE. If there are none, stop and point to `/brain --setup`. Ask which
    vault holds career material. Usually it's the personal one, never a
    current employer's.
 2. In that vault, search for career notes: folders and filenames matching
