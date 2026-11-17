@@ -16,7 +16,7 @@
 # <base>..HEAD plus uncommitted and untracked files, so no marker is ever
 # written for a change that would publish a private term. It skips that only
 # when GITHUB_ACTIONS=true (the leak-check workflow does it there, with the
-# secret), and warns when this clone's pre-push leak check is not enabled.
+# secret), and warns when this clone's pre-push hook is missing or stale.
 #
 # Exit: 0 pass, 1 an eval failed, 2 usage/setup error (no private term list
 #       included), 3 a real brain vault changed, 4 a private term found.
@@ -200,8 +200,13 @@ json_failed() { jq -r '.cases[] | select((.aggregates.score // 0) < 1) | .name' 
 # Leak check first: it is free, and a leak makes every eval result moot.
 if [ "${GITHUB_ACTIONS:-}" != true ]; then
   hooks="$(git config --type=path --get core.hooksPath || true)"
-  if [ "$hooks" != .githooks ] && [ "$hooks" != "$ROOT/.githooks" ]; then
-    echo "warning: this clone's pre-push leak check is off; enable it: git config core.hooksPath .githooks" >&2
+  [ -n "$hooks" ] || hooks="$(git rev-parse --path-format=absolute --git-path hooks)"
+  case "$hooks" in /*) ;; *) hooks="$ROOT/$hooks" ;; esac
+  if [ ! -f "$hooks/pre-push" ] || [ ! -x "$hooks/pre-push" ] || ! grep -q leak-check "$hooks/pre-push"; then
+    echo "warning: this clone's pre-push leak check is not installed (no executable leak-check pre-push in $hooks); see README, Leak check" >&2
+  elif git cat-file -e refs/remotes/origin/main:scripts/pre-push 2>/dev/null \
+       && ! git cat-file blob refs/remotes/origin/main:scripts/pre-push | cmp -s - "$hooks/pre-push"; then
+    echo "warning: the installed pre-push hook differs from origin/main's scripts/pre-push; reinstall it (README, Leak check)" >&2
   fi
   if [ "$DRY" = 1 ]; then
     echo "  would run: python3 -I scripts/leak-check --range $BASE HEAD --worktree"
