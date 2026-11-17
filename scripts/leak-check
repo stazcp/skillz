@@ -616,16 +616,26 @@ def published_tips(sc, url):
                 return [s for s in shas if sc.objs.kind(s) in ("commit", "tag")]
         except (subprocess.TimeoutExpired, OSError):
             pass
-        # ls-remote failed: trust only tracking refs of a remote fetched from this very URL.
-        names = []
-        for line in git("config", "--get-regexp", r"^remote\..*\.url$", ok=(0, 1)).decode("utf-8", "replace").splitlines():
-            key, _, val = line.partition(" ")
-            if _same_url(val, url):
-                names.append(key[len("remote."):-len(".url")])
+        # ls-remote failed. Count a tracking ref only when its remote's fetch URL is
+        # this push URL and FETCH_HEAD confirms git fetched that commit from this URL;
+        # anything unconfirmed is scanned (fail closed).
+        fetched = set()
+        try:
+            with open(git("rev-parse", "--git-path", "FETCH_HEAD").rstrip(b"\n"), "rb") as f:
+                for line in f.read().decode("utf-8", "replace").splitlines():
+                    parts = line.split("\t")
+                    if len(parts) >= 3 and " of " in parts[-1] and _same_url(parts[-1].rsplit(" of ", 1)[1], url):
+                        fetched.add(parts[0])
+        except OSError:
+            pass
         tips = []
-        for name in names:
-            out = git("for-each-ref", "--format=%(objectname)", "refs/remotes/%s/" % name)
-            tips += out.decode().split()
+        for name in git("remote").decode("utf-8", "replace").split():
+            urls = git("config", "--get-all", "remote.%s.url" % name, ok=(0, 1)).decode("utf-8", "replace").split()
+            fetch_url = git("remote", "get-url", name, ok=(0, 2, 128)).decode("utf-8", "replace").strip()
+            if len(urls) != 1 or not (_same_url(fetch_url, url) or _same_url(urls[0], url)):
+                continue
+            out = git("for-each-ref", "--format=%(objectname)", "refs/remotes/%s/" % name).decode().split()
+            tips += [t for t in out if t in fetched]
         return tips
     return []                         # unknown destination: scan the whole pushed history
 
@@ -637,10 +647,10 @@ def mode_pre_push(sc, url, stdin):
         if len(parts) != 4:
             continue
         local_ref, local_sha, remote_ref, remote_sha = parts
+        if NULL_SHA.match(local_sha.decode()):
+            continue   # a delete publishes nothing, and is how a leaked name is cleaned up
         sc.ref_name(local_ref)
         sc.ref_name(remote_ref)
-        if NULL_SHA.match(local_sha.decode()):
-            continue                   # a delete publishes nothing new
         if not NULL_SHA.match(remote_sha.decode()) and sc.objs.kind(remote_sha) in ("commit", "tag"):
             exclude.append(remote_sha.decode())
         sc.target(local_sha, remote_ref, tips)

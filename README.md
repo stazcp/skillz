@@ -290,9 +290,11 @@ edit, but by then they are public); a push from a clone without the hook,
 or with it skipped, is caught only by CI, after the branch is public; Git LFS
 content is not scanned, only its pointer files; text inside images, PDFs'
 non-zlib streams, encrypted or other archive formats, or base64 is not
-decoded; a term written with other separators (`ab` for `a b`) matches only
-in names and identities, so list the variants that matter; `--all` may
-report history that predates the check.
+decoded; a multi-word term written joined (`johnsmith` for "john smith"),
+or wrapped across quote- or comment-prefixed lines (`> john` / `> smith`,
+`# john` / `# smith`), does not match, so list the variants that matter; the Claude hook does not read
+scripts run through `make` or another interpreter (`python x.py`); `--all`
+may report history that predates the check.
 
 ## License
 
