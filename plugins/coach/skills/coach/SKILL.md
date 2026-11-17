@@ -115,12 +115,13 @@ offer to when the session has clearly landed:
 
 Write the note through the **brain** skill so the vault's own rules apply:
 filing, git, the secret scan before any push, and its "Never here" rules. Call
-the Skill tool with `skill: brain` and args `@<vault>` followed by the note
+the Skill tool with `skill: brain:brain` (plugin skills are namespaced; if
+that name isn't found, try `brain`) and args `@<vault>` followed by the note
 below and the instruction "save as `<Sessions>/<filename>.md`". Filename:
 `YYYY-MM-DD Coaching - <topic in 2-5 words>`, absolute date from `date`.
 If this session already saved a note, append a dated section to it instead.
 
-**brain missing.** If the Skill call errors (for example "Unknown skill"),
+**brain missing.** If both names error (for example "Unknown skill"),
 write the note yourself with the Write tool at
 `<vault Path>/<Sessions>/<filename>.md`, following the vault spec's
 Conventions. Run no git at all: no commit, no push. Never stop and ask. Report
@@ -181,8 +182,9 @@ End with one question worth bringing to the next session.
 
 1. List the brain vaults with the Glob tool, not a shell glob (a pattern
    that matches nothing aborts the whole command under zsh): `<home>/*.md`
-   and `<home>/*/brain.md`, where `<home>` is `$BRAIN_HOME` or
-   `~/.config/brain`. Skip TEMPLATE. If there are none, stop and point to `/brain --setup`. Ask which
+   and `<home>/*/brain.md`. Glob expands neither `$VARS` nor `~`, so get
+   `<home>` as an absolute path first: `echo "${BRAIN_HOME:-$HOME/.config/brain}"`.
+   Skip TEMPLATE. If there are none, stop and point to `/brain --setup`. Ask which
    vault holds career material. Usually it's the personal one, never a
    current employer's.
 2. In that vault, search for career notes: folders and filenames matching
