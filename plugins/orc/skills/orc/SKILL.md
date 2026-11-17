@@ -1,10 +1,11 @@
 ---
 name: orc
 description: >-
-  Turn on tier handoffs and output-volume routing in this session, judged per
-  question, not per call: small-output actions stay here, anything returning
-  more than a screen in total or needing a chain of lookups goes to a tier agent
-  or a Workflow under a return contract, costly-mistake work gets a refuter;
+  Turn on tier handoffs in this session, routed on one test, "do I already
+  have what I need?": answering, drafting, deciding and acting (commit, PR,
+  gh, Slack) stay here; reading, searching, querying, testing and debugging go
+  to a tier agent or a Workflow under a return contract, costly-mistake work
+  gets a refuter;
   routes silently, asks only for costly or ambiguous choices, and hands off on
   demand
 ---
@@ -35,9 +36,11 @@ Adaptations, because this session was not launched as the orchestrator:
 
 Say once, in one line, that orc routing is on. Then carry on with the work.
 
-`/orc <task>` means "hand this off": an Agent on the tier you pick, no
-question. If the task is an inline-by-rule action (push, commit, PR, a `gh` or
-Slack action, a small edit), do it here and say in one line that it stayed inline.
+`/orc <task>` turns routing on and routes that task by the test, no question.
+If you already have what it needs (an answer, a draft, a decision, a push,
+commit, PR, `gh` or Slack action, a small edit), do it here. If it needs
+reading, searching or running anything, even one Grep, an Agent on the tier
+you pick (orc:tier-cheap to read a few files).
 Ask only when the rules themselves say to: a Workflow without standing
 authorization, the first dispatch on a model stronger than the session's, or
 a shape that could go either way where the difference matters.

@@ -1,7 +1,7 @@
 ---
-description: Under orc, a screen-or-less answer stays inline; no Agent is dispatched.
+description: Under orc, a question answerable from what the session already has stays inline; no Agent is dispatched.
 tags: [routing, cheap]
-model: sonnet
+model: opus
 max_turns: 4
 timeout_seconds: 120
 runs: 3
