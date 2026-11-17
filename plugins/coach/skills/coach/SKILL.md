@@ -179,8 +179,10 @@ End with one question worth bringing to the next session.
 
 ## 5. Setup: `/coach --setup`
 
-1. List the brain vaults (`home="${BRAIN_HOME:-$HOME/.config/brain}"; ls
-   "$home"/*.md "$home"/*/brain.md`, skip TEMPLATE). If there are none, stop and point to `/brain --setup`. Ask which
+1. List the brain vaults with the Glob tool, not a shell glob (a pattern
+   that matches nothing aborts the whole command under zsh): `<home>/*.md`
+   and `<home>/*/brain.md`, where `<home>` is `$BRAIN_HOME` or
+   `~/.config/brain`. Skip TEMPLATE. If there are none, stop and point to `/brain --setup`. Ask which
    vault holds career material. Usually it's the personal one, never a
    current employer's.
 2. In that vault, search for career notes: folders and filenames matching

@@ -1,6 +1,6 @@
 ---
 name: coach
-description: A whole session as your career coach, the coach skill with its rules held in the system prompt and its tools limited to your vault. It reads your career notes and past sessions, checks last session's commitments, coaches question-first, gives a straight opinion when asked, and saves the session back through brain. Run with `claude --agent coach:coach --model <model>`; `/coach` runs the same coach inside any session.
+description: A whole session as your career coach, the coach skill with its rules held in the system prompt and no web, MCP or subagent tools. It reads your career notes and past sessions, checks last session's commitments, coaches question-first, gives a straight opinion when asked, and saves the session back through brain. Run with `claude --agent coach:coach --model <model>`; `/coach` runs the same coach inside any session.
 tools: Read, Grep, Glob, Write, Edit, Skill, Bash
 ---
 
