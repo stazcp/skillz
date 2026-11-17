@@ -12,7 +12,12 @@
 #   $(git rev-parse --git-common-dir)/evals-passed/$(git rev-parse HEAD)
 # which a Claude Code hook checks before `gh pr create`. Keep that path stable.
 #
-# Exit: 0 pass, 1 an eval failed, 2 usage/setup error, 3 a real brain vault changed.
+# Before any eval runs it runs scripts/leak-check.sh over the same range
+# (locally; CI has its own leak-check workflow), so no marker is ever written
+# for a change that would publish a private term.
+#
+# Exit: 0 pass, 1 an eval failed, 2 usage/setup error, 3 a real brain vault changed,
+#       4 a private term found (or no term list to check against).
 set -euo pipefail
 
 BASE="origin/main"
@@ -189,6 +194,16 @@ run_eval() {
 json_cost() { [ -f "$1" ] && jq -r '.costUsd // 0' "$1" 2>/dev/null || echo 0; }
 # Failed = with-arm score below the default --threshold of 1.0.
 json_failed() { jq -r '.cases[] | select((.aggregates.score // 0) < 1) | .name' "$1" 2>/dev/null; }
+
+# Leak check first: it is free, and a leak makes every eval result moot.
+if [ -z "${CI:-}" ]; then
+  if [ "$DRY" = 1 ]; then
+    echo "  would run: scripts/leak-check.sh --base $BASE"
+  elif ! scripts/leak-check.sh --base "$BASE"; then
+    echo "FAIL: leak check did not pass; no evals run, no marker written."
+    exit 4
+  fi
+fi
 
 SUMMARY=()
 OVERALL=0

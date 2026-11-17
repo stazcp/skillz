@@ -206,10 +206,33 @@ none, the skills fall back to safe defaults.
 | `prefs.md` | standup | `github_user`, `gh_orgs`, your main focus |
 | `notes.md` | standup | standing input GitHub can't see: non-PR work, blockers, time off |
 | `presentation.md` | presentation | default output folder, how to save there, audience default |
+| `coach.md` | coach | the career vault, standing notes, sessions folder, preferences |
+| `private-terms` | `scripts/leak-check.sh` | strings that must never reach this public repo, one per line |
 
 Keep the folder wherever you keep private config (a dotfiles repo, say) and
 symlink it to `~/.config/skillz`. `brain` keeps its vault specs separately, in
 `~/.config/brain`.
+
+## Leak check
+
+This repo is public; the notes and settings the skills read are not. The
+`leak-check` CI job fails any PR, or push to `main`, that would publish a
+private term: in a file, a path, a commit message, a commit's author or
+committer, or the PR's title or body. The terms live in the `PRIVATE_TERMS`
+repo secret, never here, and the log names only where a term matched, never
+the term itself.
+
+Run it locally the same way. `scripts/eval-changed.sh` runs it first, so no
+evals-passed marker is written for a leaking change:
+
+```sh
+scripts/leak-check.sh --base origin/main   # what this branch would publish
+scripts/leak-check.sh --all                # the whole tree and history
+```
+
+Locally the terms come from `private-terms` in your private settings folder
+(above). Keep that file and the secret in step:
+`gh secret set PRIVATE_TERMS -R <owner>/<repo> < ~/.config/skillz/private-terms`.
 
 ## License
 

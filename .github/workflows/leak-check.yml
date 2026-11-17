@@ -1,0 +1,51 @@
+name: leak-check
+
+# Fails a PR, or a push to main, that would publish a private term: in a
+# file, a path, a commit message or identity, or the PR's title or body.
+# The terms live in the PRIVATE_TERMS secret, never in this repo, and the
+# log names only where a term matched, never the term (scripts/leak-check.sh).
+# PRs from forks get no secrets, so this check fails on them by design.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: leak-check-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  leak-check:
+    name: leak-check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Scan for private terms
+        env:
+          PRIVATE_TERMS: ${{ secrets.PRIVATE_TERMS }}
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [ -z "$PRIVATE_TERMS" ]; then
+            echo "::error title=Missing secret::PRIVATE_TERMS is not set. Set it with: gh secret set PRIVATE_TERMS -R <owner>/<repo> < <your private term list>"
+            exit 1
+          fi
+          if [ "$EVENT" = pull_request ]; then
+            scripts/leak-check.sh --base "origin/$BASE_REF" --text-env PR_TITLE --text-env PR_BODY
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            scripts/leak-check.sh --base "$BEFORE"
+          else
+            scripts/leak-check.sh --all
+          fi
