@@ -12,12 +12,14 @@
 #   $(git rev-parse --git-common-dir)/evals-passed/$(git rev-parse HEAD)
 # which a Claude Code hook checks before `gh pr create`. Keep that path stable.
 #
-# Before any eval runs it runs scripts/leak-check.sh over the same range
-# (locally; CI has its own leak-check workflow), so no marker is ever written
-# for a change that would publish a private term.
+# Before any eval runs it runs scripts/leak-check over every commit in
+# <base>..HEAD plus uncommitted and untracked files, so no marker is ever
+# written for a change that would publish a private term. It skips that only
+# when GITHUB_ACTIONS=true (the leak-check workflow does it there, with the
+# secret), and warns when this clone's pre-push leak check is not enabled.
 #
-# Exit: 0 pass, 1 an eval failed, 2 usage/setup error, 3 a real brain vault changed,
-#       4 a private term found (or no term list to check against).
+# Exit: 0 pass, 1 an eval failed, 2 usage/setup error (no private term list
+#       included), 3 a real brain vault changed, 4 a private term found.
 set -euo pipefail
 
 BASE="origin/main"
@@ -26,7 +28,7 @@ ALL=0
 DRY=0
 CAP="3"   # USD per plugin (suite + reruns); cases cost ~$0.12-0.37 per run
 
-usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -196,12 +198,21 @@ json_cost() { [ -f "$1" ] && jq -r '.costUsd // 0' "$1" 2>/dev/null || echo 0; }
 json_failed() { jq -r '.cases[] | select((.aggregates.score // 0) < 1) | .name' "$1" 2>/dev/null; }
 
 # Leak check first: it is free, and a leak makes every eval result moot.
-if [ -z "${CI:-}" ]; then
+if [ "${GITHUB_ACTIONS:-}" != true ]; then
+  hooks="$(git config --type=path --get core.hooksPath || true)"
+  if [ "$hooks" != .githooks ] && [ "$hooks" != "$ROOT/.githooks" ]; then
+    echo "warning: this clone's pre-push leak check is off; enable it: git config core.hooksPath .githooks" >&2
+  fi
   if [ "$DRY" = 1 ]; then
-    echo "  would run: scripts/leak-check.sh --base $BASE"
-  elif ! scripts/leak-check.sh --base "$BASE"; then
-    echo "FAIL: leak check did not pass; no evals run, no marker written."
-    exit 4
+    echo "  would run: python3 -I scripts/leak-check --range $BASE HEAD --worktree"
+  else
+    rc=0
+    python3 -I scripts/leak-check --range "$BASE" HEAD --worktree || rc=$?
+    case "$rc" in
+      0) ;;
+      1) echo "FAIL: leak check found a private term; no evals run, no marker written."; exit 4 ;;
+      *) echo "error: leak check could not run (exit $rc); no evals run, no marker written." >&2; exit 2 ;;
+    esac
   fi
 fi
 

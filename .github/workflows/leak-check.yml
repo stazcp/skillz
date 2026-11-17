@@ -1,12 +1,20 @@
 name: leak-check
 
-# Fails a PR, or a push to main, that would publish a private term: in a
-# file, a path, a commit message or identity, or the PR's title or body.
-# The terms live in the PRIVATE_TERMS secret, never in this repo, and the
-# log names only where a term matched, never the term (scripts/leak-check.sh).
-# PRs from forks get no secrets, so this check fails on them by design.
+# Fails a PR, or a push to main, that would publish a private term: in any
+# commit's files, paths or metadata, the PR's branch name, title or body.
+# The terms live in the PRIVATE_TERMS secret, never in this repo, and the log
+# says only "leak-check: FAIL" or "leak-check: clean" (scripts/leak-check).
+#
+# This is the backstop, not the gate: on a public repo a branch, its commits
+# and a PR's title and body are public once pushed or opened. The gates are
+# local and run before publishing: .githooks/pre-push and a Claude Code hook
+# (README, Leak check).
+#
+# pull_request_target runs THIS file and scanner from the base branch, with
+# the secret. The PR's commits are fetched as data only: nothing from the PR
+# is ever checked out, sourced or executed here. Keep it that way.
 on:
-  pull_request:
+  pull_request_target:
     branches: [main]
     types: [opened, synchronize, reopened, edited]
   push:
@@ -23,29 +31,42 @@ jobs:
   leak-check:
     name: leak-check
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
+      # For pull_request_target, github.sha is the base branch's tip; for a
+      # push to main, the pushed commit. Never the PR head.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch the PR's commits as data
+        if: github.event_name == 'pull_request_target'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags --quiet origin "+refs/pull/${PR_NUMBER}/head:refs/leak-check/pr-head"
+          git cat-file -e "${HEAD_SHA}^{commit}"
 
       - name: Scan for private terms
         env:
           PRIVATE_TERMS: ${{ secrets.PRIVATE_TERMS }}
           EVENT: ${{ github.event_name }}
-          BASE_REF: ${{ github.base_ref }}
-          BEFORE: ${{ github.event.before }}
+          BASE_SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+        # Untrusted values reach the scanner only through env and argv, never
+        # through ${{ }} in this script.
         run: |
-          if [ -z "$PRIVATE_TERMS" ]; then
-            echo "::error title=Missing secret::PRIVATE_TERMS is not set. Set it with: gh secret set PRIVATE_TERMS -R <owner>/<repo> < <your private term list>"
-            exit 1
-          fi
-          if [ "$EVENT" = pull_request ]; then
-            scripts/leak-check.sh --base "origin/$BASE_REF" --text-env PR_TITLE --text-env PR_BODY
-          elif [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
-            scripts/leak-check.sh --base "$BEFORE"
+          if [ "$EVENT" = pull_request_target ]; then
+            python3 -I scripts/leak-check --range "$BASE_SHA" "$HEAD_SHA" \
+              --ref-name "refs/heads/$HEAD_REF" --text-env PR_TITLE --text-env PR_BODY
           else
-            scripts/leak-check.sh --all
+            python3 -I scripts/leak-check --range "$BEFORE" "$AFTER"
           fi

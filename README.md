@@ -207,7 +207,7 @@ none, the skills fall back to safe defaults.
 | `notes.md` | standup | standing input GitHub can't see: non-PR work, blockers, time off |
 | `presentation.md` | presentation | default output folder, how to save there, audience default |
 | `coach.md` | coach | the career vault, standing notes, sessions folder, preferences |
-| `private-terms` | `scripts/leak-check.sh` | strings that must never reach this public repo, one per line |
+| `private-terms` | `scripts/leak-check` | strings that must never reach this public repo, one per line |
 
 Keep the folder wherever you keep private config (a dotfiles repo, say) and
 symlink it to `~/.config/skillz`. `brain` keeps its vault specs separately, in
@@ -215,24 +215,62 @@ symlink it to `~/.config/skillz`. `brain` keeps its vault specs separately, in
 
 ## Leak check
 
-This repo is public; the notes and settings the skills read are not. The
-`leak-check` CI job fails any PR, or push to `main`, that would publish a
-private term: in a file, a path, a commit message, a commit's author or
-committer, or the PR's title or body. The terms live in the `PRIVATE_TERMS`
-repo secret, never here, and the log names only where a term matched, never
-the term itself.
+This repo is public; the notes and settings the skills read are not.
+`scripts/leak-check` fails on anything that would publish a term from a
+private list. For every commit it scans the author, committer and message,
+the full new content of each file the commit adds or changes (raw bytes:
+`.gitattributes` is ignored; UTF-8, UTF-16 and UTF-32 are decoded; zip and
+gzip members are opened), every path added, deleted or renamed, and symlink
+targets. It also scans ref names, annotated tags and any text you hand it.
+Terms and text are normalized alike (NFKC, case-folded, invisible characters
+dropped, whitespace and newlines collapsed, HTML comments, tags and entities
+undone), and each file or message is matched whole, so a term split by a line
+wrap or a zero-width space still matches. Output names where a term matched
+and its number in the list, never the term; on GitHub Actions it prints only
+`leak-check: FAIL` or `leak-check: clean`.
 
-Run it locally the same way. `scripts/eval-changed.sh` runs it first, so no
-evals-passed marker is written for a leaking change:
+On a public repo a branch, its commits and a PR's title and body are public
+the moment they are pushed or opened, so the gates run before publishing:
+
+1. **pre-push** (`.githooks/pre-push`): scans every commit not yet on the
+   remote, every pushed branch and tag name, and annotated tag messages.
+   Enable it once per clone: `git config core.hooksPath .githooks`.
+   `scripts/eval-changed.sh` warns when it is off, and runs the scan itself.
+2. **Claude Code hook** (`leak-guard.sh`, kept in the owner's dotfiles):
+   blocks a `gh` command (PR, issue, release, `gh api`, ...) whose text, or
+   any file it names (`--body-file`, `-F`, `--notes-file`), holds a term,
+   and a push here that would skip the pre-push hook.
+3. **CI** (`leak-check` workflow, a required check): `pull_request_target`
+   runs the base branch's scanner over the PR's commits (fetched as data,
+   never run), branch name, title and body; a push to `main` is rescanned.
+   Merges are squash-only, with the commit title and message taken from the
+   PR title and body, which this check has scanned.
 
 ```sh
-scripts/leak-check.sh --base origin/main   # what this branch would publish
-scripts/leak-check.sh --all                # the whole tree and history
+python3 -I scripts/leak-check --range origin/main HEAD --worktree   # this branch
+python3 -I scripts/leak-check --all                                 # audit everything
 ```
 
 Locally the terms come from `private-terms` in your private settings folder
-(above). Keep that file and the secret in step:
-`gh secret set PRIVATE_TERMS -R <owner>/<repo> < ~/.config/skillz/private-terms`.
+(above), one per line, `#` comments allowed. CI reads the `PRIVATE_TERMS`
+secret. GitHub masks a secret line by line, so set it from the filtered
+list (no comments, blank lines or surrounding spaces), never the raw file.
+Run this yourself, in your own terminal:
+
+```sh
+tr -d '\r' < ~/.config/skillz/private-terms | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^#/d' -e '/^$/d' | gh secret set PRIVATE_TERMS -R stazcp/skillz
+```
+
+Known limits: PR and issue comments, reviews, and releases made or edited
+in the GitHub web UI, or by a tool other than `gh` in Claude's Bash (a GitHub
+MCP server, say), are not checked (CI rescans a PR's title and body after an
+edit, but by then they are public); a push from a clone without the hook
+enabled, or with it skipped, is caught only by CI, after the branch is
+public; Git LFS content is not scanned, only its pointer files; nor is text
+inside other encodings or containers (base64, PDF streams, images, encrypted
+archives); a term written with other separators (`quuxfrob` for `quux frob`)
+matches only in names, so list the variants that matter; `--all` also
+reports the owner's old commit email in existing history, which is expected.
 
 ## License
 
