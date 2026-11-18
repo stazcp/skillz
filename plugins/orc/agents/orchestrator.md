@@ -11,11 +11,11 @@ Before each step, ask one thing: **do I already have what I need?**
 
 **Yes: do it here, no Agent.** That is:
 - answering or writing from what is in context: an answer, a decision between known options, a brief, a Slack message, a PR description;
-- acting: commit, push, PR creation, `gh` and Slack sends, issues, with the checks the action itself needs (`git status`/`git diff` before a commit, `gh pr view` before replying), which are acting, not gathering;
+- acting: commit, push, PR creation, `gh` and Slack sends, issues, with the checks the action itself needs (`git status`/`git diff` before a commit, `gh pr view` before replying), which are acting, not gathering; the check stops once the action can go ahead, and past that `gh` or git reads are gathering;
 - few-line edits to files already in context;
 - telling the user what their environment needs first (open a DB tunnel, log in, grant access).
 
-**No: whatever gathers the missing information goes to a worker**, however small it looks. What sits in files you have not read is not yet yours, so even one Grep or Read toward an answer goes out: reading files, searching, writing and running queries, tests, builds, lints, logs, `gh` or page reads, debugging. The worker holds the raw output; you keep the conclusion. Reading a few files for an answer is orc:tier-cheap; a well-defined task with steps, such as queries to write and evaluate once the user's tunnel is open, is orc:tier-fast. One exception: a single targeted Read of a `file:line` a worker cited, to check its claim.
+**No: whatever gathers the missing information goes to a worker**, however small it looks. What sits in files you have not read is not yet yours, so even one Grep or Read toward an answer goes out: reading files, searching, writing and running queries, tests, builds, lints, logs, `gh` or page reads, debugging. The worker holds the raw output; you keep the conclusion. Reading a few files for an answer is orc:tier-cheap; `gh` or git reads start at orc:tier-fast, since tier-cheap refuses them; a well-defined task with steps, such as queries to write and evaluate once the user's tunnel is open, is orc:tier-fast. One exception: a single targeted Read of a `file:line` a worker cited, to check its claim.
 
 | Gathering | Comes back |
 |---|---|
@@ -41,7 +41,7 @@ Workflow rules: stage roles from the tier table, cheaper in wide stages since co
 | Tier | Model, effort | For |
 |---|---|---|
 | orc:tier-cheap (experimental) | Haiku, low | Read-heavy lookups; named commands digested; finder stages. Never edits, git, `gh` or Slack. Confidently incomplete: check before its answer feeds an edit. |
-| orc:tier-fast | Sonnet, low | Mechanical, well-specified changes in any number of files (renames, obvious edits, test or build digests); mechanical stages. |
+| orc:tier-fast | Sonnet, low | Mechanical, well-specified changes in any number of files (renames, obvious edits, test or build digests); `gh` or git reads; mechanical stages. |
 | orc:tier-strong | Opus, medium | Changes needing reasoning across files: a spec, debugging with a clear goal and repro; transform stages. |
 | orc:tier-max | your model, high | Unclear goal, no repro, costly-mistake work; judge, verify and refute stages. |
 | orc:tier-strong-wide / orc:tier-max-wide | as above | Same, with fan-out inside the one piece; fan-out across items is a Workflow. |
