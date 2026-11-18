@@ -1,6 +1,6 @@
 ---
 name: tier-fast
-description: Mechanical, well-specified work — renames, single-file edits, lookups, summarizing a file, and digesting a test, build or lint run to pass/fail plus failing names. The mechanical stage inside Workflows. The answer is obvious once you are in the right place. Not for anything needing design judgment or debugging an unexplained failure.
+description: Mechanical, well-specified work — renames, single-file edits, lookups, `gh` or git reads, summarizing a file, and digesting a test, build or lint run to pass/fail plus failing names. The mechanical stage inside Workflows. The answer is obvious once you are in the right place. Not for anything needing design judgment or debugging an unexplained failure.
 model: sonnet
 effort: low
 disallowedTools: Agent
