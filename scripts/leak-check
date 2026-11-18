@@ -17,11 +17,13 @@ and replace refs are ignored (a repo with refs/replace/* or grafts is
 refused); UTF-8, cp1252, UTF-16 and UTF-32 are tried, and zip, gzip, zlib,
 bzip2 and xz content is opened. --pre-push also scans pushed ref names and
 annotated tags, and counts as already public only what the destination itself
-advertises. --github-event scans a pull_request_target or pull_request PR's
-commits, head branch, title and body, or a push's before..after, and fails a
-PR from a fork without scanning it. Every mode but --pre-push claims the whole
-history it names, so it is refused (exit 2) in a shallow clone whose edge the
-walk reaches; fetch full history.
+advertises. --github-event scans a pull_request_target PR's commits, head
+branch, title and body, or a push's before..after, and fails a PR from a fork
+without scanning it. A pull_request event is refused (exit 2) under
+GITHUB_ACTIONS=true, since that run uses the PR's own scanner and cannot gate;
+locally it is scanned like pull_request_target. Every mode but --pre-push
+claims the whole history it names, so it is refused (exit 2) in a shallow
+clone whose edge the walk reaches; fetch full history.
 
 Terms come from $PRIVATE_TERMS (newline-separated) when it is set, else from
 the file $PRIVATE_TERMS_FILE, default ${SKILLZ_CONTEXT:-~/.config/skillz}/
@@ -306,6 +308,15 @@ def git(*args, ok=(0,)):
     return p.stdout
 
 
+def git_path(name):
+    """Path of name in the git dir. git before 2.5 has no --git-path and echoes it
+    back (exit 0), which would name a file that never exists; refuse that."""
+    out = git("rev-parse", "--git-path", name).rstrip(b"\n")
+    if not out or b"\n" in out or out.startswith(b"-"):
+        raise SetupError("cannot resolve the git directory (git 2.5 or newer is needed)")
+    return out
+
+
 class Objects:
     """Raw object access through one `git cat-file --batch` and one --batch-check."""
 
@@ -389,19 +400,22 @@ def refuse_replacements():
     if git("for-each-ref", "--format=%(refname)", "refs/replace/").strip():
         raise SetupError("this repo has refs/replace/*: a push sends the originals, so a scan through "
                          "replacements proves nothing. Remove them (git replace -d) and rerun.")
-    grafts = git("rev-parse", "--git-path", "info/grafts").rstrip(b"\n")
-    if os.path.exists(grafts):
+    if os.path.exists(git_path("info/grafts")):
         raise SetupError("this repo has an info/grafts file; remove it and rerun.")
 
 
 # ---------- scanning ----------
 
 def refuse_shallow_edge(shas):
-    """A walk that reaches a shallow clone's edge misses every commit past it."""
-    if git("rev-parse", "--is-shallow-repository").strip() != b"true":
+    """A walk that reaches a shallow clone's edge misses every commit past it.
+    A clone is shallow exactly when its git dir holds a shallow file; that test
+    works on every git (rev-parse --is-shallow-repository needs 2.15 and older
+    git echoes it back with exit 0)."""
+    shallow = git_path("shallow")
+    if not os.path.lexists(shallow):
         return
     try:
-        with open(git("rev-parse", "--git-path", "shallow").rstrip(b"\n"), "rb") as f:
+        with open(shallow, "rb") as f:
             edge = set(f.read().split())
     except OSError:
         raise SetupError("this clone is shallow and its shallow list is unreadable; fetch full history")
@@ -653,7 +667,7 @@ def published_tips(sc, url):
         # anything unconfirmed is scanned (fail closed).
         fetched = set()
         try:
-            with open(git("rev-parse", "--git-path", "FETCH_HEAD").rstrip(b"\n"), "rb") as f:
+            with open(git_path("FETCH_HEAD"), "rb") as f:
                 for line in f.read().decode("utf-8", "replace").splitlines():
                     parts = line.split("\t")
                     if len(parts) >= 3 and " of " in parts[-1] and _same_url(parts[-1].rsplit(" of ", 1)[1], url):
@@ -700,6 +714,11 @@ def mode_github_event(sc):
             ev = json.load(f)
     except (OSError, ValueError):
         raise SetupError("--github-event needs a readable $GITHUB_EVENT_PATH")
+    if name == "pull_request" and CI:
+        # A pull_request run executes the PR's own copy of this scanner and workflow,
+        # so the PR decides the result: it cannot gate. Locally it is a dry run.
+        raise SetupError("a pull_request run executes the PR's own scanner, so it cannot gate; "
+                         "run --github-event from a pull_request_target workflow")
     if name in ("pull_request_target", "pull_request"):
         pr = ev.get("pull_request") or {}
         head = pr.get("head") or {}
