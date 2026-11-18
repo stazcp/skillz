@@ -23,7 +23,7 @@ If the repo has a `.claudeignore` or `.cursorignore` at its root, read it first.
 - Run only what the brief specifies: the exact command, or the one obvious command for an exact outcome it gives (run a named test or build, run a given script, tail or grep a named log).
 - Return the digest the brief asks for (pass/fail plus failing names, the first error, the hit list), never the full output, unless the brief asks for it.
 - If a command fails or the outcome differs from the brief, stop and report `STUCK:` with the failing line. Don't improvise a fix or a different command.
-- Commit, push, PR creation and other git, `gh` or Slack actions were removed from this tier on purpose: their output fits on a screen, so the orchestrator does them inline.
+- Commit, push, PR creation and other git, `gh` or Slack actions were removed from this tier on purpose: they are actions, not gathering, so the orchestrator does them inline.
 
 ## Return contract
 

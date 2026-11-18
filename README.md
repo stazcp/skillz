@@ -53,8 +53,10 @@ over long sessions.
 | `orc:tier-all-out` | your session's model, max | Only when you ask for it |
 
 Start your session on Opus, or on Fable if your account has it. Each subagent
-starts cold, with roughly 15–25k tokens of context, so orc keeps small and
-medium work in your session.
+starts cold, with roughly 15–25k tokens of context. orc routes on one test,
+"do I already have what I need?": answering, drafting, deciding and git/PR
+actions stay in your session; anything that reads, searches or runs goes to a
+worker, so your context keeps only conclusions.
 
 ## brain
 
