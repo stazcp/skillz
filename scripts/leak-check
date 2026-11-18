@@ -393,6 +393,15 @@ def refuse_replacements():
 
 # ---------- scanning ----------
 
+def text_bytes(s):
+    """str -> bytes for scanning. A lone surrogate (JSON allows one) is kept as
+    its 3 bytes, which decode to U+FFFD, so the text around it is still scanned."""
+    try:
+        return s.encode("utf-8", "surrogateescape")
+    except UnicodeEncodeError:
+        return s.encode("utf-8", "surrogatepass")
+
+
 class Scanner:
     def __init__(self, terms):
         self.terms = terms
@@ -524,7 +533,7 @@ class Scanner:
 
     def ref_name(self, name, label="ref name {}"):
         if isinstance(name, str):
-            name = name.encode("utf-8", "surrogateescape")
+            name = text_bytes(name)
         self.scan(name, label, name, is_name=True)
 
     # --- text outside git objects ---
@@ -649,7 +658,7 @@ def mode_pre_push(sc, url, stdin):
         local_ref, local_sha, remote_ref, remote_sha = parts
         if NULL_SHA.match(local_sha.decode()):
             continue   # a delete publishes nothing, and is how a leaked name is cleaned up
-        sc.ref_name(local_ref)
+        # Only the remote ref name is sent; the local one never leaves this clone.
         sc.ref_name(remote_ref)
         if not NULL_SHA.match(remote_sha.decode()) and sc.objs.kind(remote_sha) in ("commit", "tag"):
             exclude.append(remote_sha.decode())
@@ -674,17 +683,27 @@ def mode_github_event(sc):
         if not repo or (head.get("repo") or {}).get("full_name") != repo:
             sc.fork = True             # never scan (or answer about) an outside PR
             return "a PR from outside the repo, not scanned"
-        base = os.environ.get("GITHUB_SHA") or (pr.get("base") or {}).get("sha") or ""
+        # pull_request_target: GITHUB_SHA is the base branch tip. pull_request: it is the
+        # merge commit, which holds the PR head, so it would empty the range; use base.sha.
+        base = (pr.get("base") or {}).get("sha") or ""
+        if name == "pull_request_target":
+            base = os.environ.get("GITHUB_SHA") or base
         n = mode_range(sc, base, head.get("sha") or "")
         sc.ref_name("refs/heads/" + (head.get("ref") or ""), "PR head branch {}")
-        sc.message((pr.get("title") or "").encode("utf-8", "surrogateescape"), "PR title")
-        sc.message((pr.get("body") or "").encode("utf-8", "surrogateescape"), "PR body")
+        sc.message(text_bytes(pr.get("title") or ""), "PR title")
+        sc.message(text_bytes(pr.get("body") or ""), "PR body")
         return "%d PR commit(s), head branch, title and body" % n
     if name == "push":
         after = ev.get("after") or ""
         if NULL_SHA.match(after) or not after:
             return "a branch delete, nothing to scan"
-        n = mode_range(sc, ev.get("before") or "0", after)
+        before = ev.get("before") or "0"
+        if not NULL_SHA.match(before) and not sc.objs.info(before + "^{commit}"):
+            # A force-push (say, purging a leaked commit) leaves before out of the
+            # clone: scan all of after's history instead, a superset of what is new.
+            warn("the push's before commit is not in this clone; scanning all of after's history")
+            before = "0"
+        n = mode_range(sc, before, after)
         return "%d pushed commit(s)" % n
     raise SetupError("--github-event supports pull_request_target and push events only")
 
@@ -692,14 +711,14 @@ def mode_github_event(sc):
 def parse(argv):
     o = {"range": None, "pre_push": None, "url": None, "event": False, "all": False, "worktree": False,
          "refs": [], "envs": [], "files": []}
-    it = iter(argv)
+    args = list(argv)
 
     def need(flag):
-        try:
-            return next(it)
-        except StopIteration:
+        if not args:
             raise SetupError("%s needs a value" % flag)
-    for a in it:
+        return args.pop(0)
+    while args:
+        a = args.pop(0)
         flag, eq, val = a.partition("=")
         if a in ("-h", "--help"):
             print(__doc__)
@@ -708,7 +727,8 @@ def parse(argv):
             o["range"] = (need(a), need(a))
         elif a == "--pre-push":
             o["pre_push"] = need(a)
-            o["url"] = next(it, "")   # git passes the destination URL as the hook's second argument
+            # git passes the destination URL as the hook's second argument; a --flag is not one.
+            o["url"] = "" if not args or args[0].startswith("--") else args.pop(0)
         elif a == "--github-event":
             o["event"] = True
         elif a == "--all":
