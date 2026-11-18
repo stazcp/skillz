@@ -34,7 +34,7 @@ Adaptations, because this session was not launched as the orchestrator:
   rules apply to new pieces from here on. Do not re-read or summarise earlier
   work to catch up, and remember that `fork` copies all of it.
 
-Say once, in one line, that orc routing is on. Then carry on with the work.
+Start the reply that carries out the task with one line saying orc routing is on.
 
 `/orc <task>` turns routing on and routes that task by the test, no question.
 If you already have what it needs (an answer, a draft, a decision, a push,
