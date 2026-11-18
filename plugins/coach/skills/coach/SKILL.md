@@ -19,16 +19,19 @@ sessions go all come from the coach config.
 First resolve the two folders to absolute paths. The Read, Write and Glob
 tools expand neither `$VARS` nor `~`, so get them from one shell call:
 
-    echo "${SKILLZ_CONTEXT:-$HOME/.config/skillz}"; echo "${BRAIN_HOME:-$HOME/.config/brain}"
+    echo "${SKILLZ_CONTEXT:-$HOME/.config/skillz}"; echo "${BRAIN_HOME:-$HOME/.config/brain}"; echo "$HOME"
 
 The first line is `<context>`, your context folder; the second is `<home>`,
-the brain home. Use those absolute paths in every tool call below. Then read
+the brain home; the third is `$HOME`. A line that starts with `~` means
+`$HOME` in its place; a line that is still not absolute (a relative path)
+is a setup error: say so in one line and stop. Use those absolute paths in
+every tool call below. Then read
 `<context>/coach.md` with the Read tool, not a shell command.
 
 - **Missing**, or the argument is `--setup`: run Setup (§5) and stop there.
 - It names a brain **Vault**. Resolve that vault's Path the way the brain
   skill does (its spec at `<home>/<vault>.md` or `<home>/<vault>/brain.md`;
-  a Path written with a leading `~` means `$HOME`). If
+  a Path written with a leading `~` means the `$HOME` printed above). If
   the spec or the Path is missing on this machine, say so in one line and
   offer `/brain --setup`. Don't coach blind and don't create folders.
 
@@ -39,7 +42,8 @@ Then read, quietly and in full:
 2. The three newest notes in the **Sessions** folder (by the date in the
    filename). The newest one's `## Commitments` is the check-in.
 3. If a topic was given, grep the vault for it
-   (`grep -rliF '<term>' <vault> --include='*.md'`, skip `.obsidian/` and
+   (`grep -rliF '<term>' '<vault>' --include='*.md'`, the vault path
+   quoted, since iCloud paths contain spaces; skip `.obsidian/` and
    `.git/`) and read the hits that matter.
 
 Never paste or summarize these notes back to the user. They already wrote
