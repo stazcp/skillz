@@ -13,8 +13,8 @@ description: >-
 # orc
 
 Read `../../agents/orchestrator.md`, relative to this skill's base directory, now,
-in full, and follow it for the rest of this session. It is the reference;
-don't restate it.
+in full, before writing anything, and follow it for the rest of this session.
+It is the reference; don't restate it.
 
 Adaptations, because this session was not launched as the orchestrator:
 
@@ -34,7 +34,10 @@ Adaptations, because this session was not launched as the orchestrator:
   rules apply to new pieces from here on. Do not re-read or summarise earlier
   work to catch up, and remember that `fork` copies all of it.
 
-Start the reply that carries out the task with one line saying orc routing is on.
+Once it is read, the message that answers or carries out the task opens with
+one line saying orc routing is on, and the answer follows in that same
+message: not before the Read, not in a message of its own. This line is the
+one exception to saying nothing about routing when everything was inline.
 
 `/orc <task>` turns routing on and routes that task by the test, no question.
 If you already have what it needs (an answer, a draft, a decision, a push,
