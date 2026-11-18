@@ -17,8 +17,15 @@ and replace refs are ignored (a repo with refs/replace/* or grafts is
 refused); UTF-8, cp1252, UTF-16 and UTF-32 are tried, and zip, gzip, zlib,
 bzip2 and xz content is opened. --pre-push also scans pushed ref names and
 annotated tags, and counts as already public only what the destination itself
-advertises. --github-event scans a PR's commits, head branch, title and body,
-or a push's before..after, and fails a PR from a fork without scanning it.
+advertises. Its URL argument is mandatory: git always passes REMOTE and URL to
+the pre-push hook, and the word after REMOTE is taken as URL even if it looks
+like a flag, so run by hand it must be given both. --github-event scans a pull_request_target PR's commits, head
+branch, title and body, or a push's before..after, and fails a PR from a fork
+without scanning it. A pull_request event is refused (exit 2) under
+GITHUB_ACTIONS=true, since that run uses the PR's own scanner and cannot gate;
+locally it is scanned like pull_request_target. Every mode but --pre-push
+claims the whole history it names, so it is refused (exit 2) in a shallow
+clone whose edge the walk reaches; fetch full history.
 
 Terms come from $PRIVATE_TERMS (newline-separated) when it is set, else from
 the file $PRIVATE_TERMS_FILE, default ${SKILLZ_CONTEXT:-~/.config/skillz}/
@@ -303,6 +310,15 @@ def git(*args, ok=(0,)):
     return p.stdout
 
 
+def git_path(name):
+    """Path of name in the git dir. git before 2.5 has no --git-path and echoes it
+    back (exit 0), which would name a file that never exists; refuse that."""
+    out = git("rev-parse", "--git-path", name).rstrip(b"\n")
+    if not out or b"\n" in out or out.startswith(b"-"):
+        raise SetupError("cannot resolve the git directory (git 2.5 or newer is needed)")
+    return out
+
+
 class Objects:
     """Raw object access through one `git cat-file --batch` and one --batch-check."""
 
@@ -386,12 +402,40 @@ def refuse_replacements():
     if git("for-each-ref", "--format=%(refname)", "refs/replace/").strip():
         raise SetupError("this repo has refs/replace/*: a push sends the originals, so a scan through "
                          "replacements proves nothing. Remove them (git replace -d) and rerun.")
-    grafts = git("rev-parse", "--git-path", "info/grafts").rstrip(b"\n")
-    if os.path.exists(grafts):
+    if os.path.exists(git_path("info/grafts")):
         raise SetupError("this repo has an info/grafts file; remove it and rerun.")
 
 
 # ---------- scanning ----------
+
+def refuse_shallow_edge(shas):
+    """A walk that reaches a shallow clone's edge misses every commit past it.
+    A clone is shallow exactly when its git dir holds a shallow file; that test
+    works on every git (rev-parse --is-shallow-repository needs 2.15 and older
+    git echoes it back with exit 0)."""
+    shallow = git_path("shallow")
+    if not os.path.lexists(shallow):
+        return
+    try:
+        with open(shallow, "rb") as f:
+            edge = set(f.read().split())
+    except OSError:
+        raise SetupError("this clone is shallow and its shallow list is unreadable; fetch full history")
+    if edge.intersection(shas):
+        raise SetupError("this clone is shallow and the scan reaches its edge, so older commits "
+                         "would go unscanned; fetch full history (git fetch --unshallow)")
+
+
+SURROGATE = re.compile("[\ud800-\udfff]")
+
+
+def text_bytes(s):
+    """JSON text -> bytes for scanning. Each lone surrogate (JSON allows one)
+    becomes U+FFFD, which norm drops, so the text around it is still scanned
+    and no two of them can pair into a character that would hide a term (a
+    combining mark that NFKC folds into the term's last letter, say)."""
+    return SURROGATE.sub("\ufffd", s).encode("utf-8")
+
 
 class Scanner:
     def __init__(self, terms):
@@ -445,8 +489,16 @@ class Scanner:
 
     def blob(self, sha):
         if sha not in self.blobs:
-            obj = self.objs.read(sha)
-            self.blobs[sha] = self.match_bytes(obj[1]) if obj else set()
+            # A blob this clone lacks and cannot fetch (a partial clone whose promisor
+            # fetch fails or is disabled, a missing object) is unread, never clean.
+            err = "cannot read blob %s; fetch it or use a full clone" % sha
+            try:
+                obj = self.objs.read(sha)
+            except SetupError:
+                raise SetupError(err)    # cat-file died, e.g. on a failed promisor fetch
+            if not obj:
+                raise SetupError(err)
+            self.blobs[sha] = self.match_bytes(obj[1])
         return self.blobs[sha]
 
     # --- commits ---
@@ -486,7 +538,9 @@ class Scanner:
             if status != "D" and not NULL_SHA.match(bsha) and mode not in (b"160000", b"040000"):
                 self.add((prefix + " file {}", path), self.blob(bsha))
 
-    def commits(self, include, exclude=()):
+    def commits(self, include, exclude=(), complete=True):
+        """Scan include minus exclude. complete: the caller claims all of that history
+        (not just what this clone holds), so a walk that reaches a shallow edge fails."""
         if not include:
             return 0
         revs = list(include) + ["^" + e for e in exclude]
@@ -495,6 +549,8 @@ class Scanner:
         if p.returncode != 0:
             raise SetupError("git rev-list failed")
         shas = p.stdout.split()
+        if complete:
+            refuse_shallow_edge(shas)
         for c in shas:
             self.commit(c.decode())
         return len(shas)
@@ -524,7 +580,7 @@ class Scanner:
 
     def ref_name(self, name, label="ref name {}"):
         if isinstance(name, str):
-            name = name.encode("utf-8", "surrogateescape")
+            name = text_bytes(name)
         self.scan(name, label, name, is_name=True)
 
     # --- text outside git objects ---
@@ -621,7 +677,7 @@ def published_tips(sc, url):
         # anything unconfirmed is scanned (fail closed).
         fetched = set()
         try:
-            with open(git("rev-parse", "--git-path", "FETCH_HEAD").rstrip(b"\n"), "rb") as f:
+            with open(git_path("FETCH_HEAD"), "rb") as f:
                 for line in f.read().decode("utf-8", "replace").splitlines():
                     parts = line.split("\t")
                     if len(parts) >= 3 and " of " in parts[-1] and _same_url(parts[-1].rsplit(" of ", 1)[1], url):
@@ -649,14 +705,15 @@ def mode_pre_push(sc, url, stdin):
         local_ref, local_sha, remote_ref, remote_sha = parts
         if NULL_SHA.match(local_sha.decode()):
             continue   # a delete publishes nothing, and is how a leaked name is cleaned up
-        sc.ref_name(local_ref)
+        # Only the remote ref name is sent; the local one never leaves this clone.
         sc.ref_name(remote_ref)
         if not NULL_SHA.match(remote_sha.decode()) and sc.objs.kind(remote_sha) in ("commit", "tag"):
             exclude.append(remote_sha.decode())
         sc.target(local_sha, remote_ref, tips)
     if not tips:
         return 0
-    return sc.commits(tips, exclude + published_tips(sc, url))
+    # complete=False: commits past a shallow edge are not in this clone, so this push cannot send them.
+    return sc.commits(tips, exclude + published_tips(sc, url), complete=False)
 
 
 def mode_github_event(sc):
@@ -667,6 +724,11 @@ def mode_github_event(sc):
             ev = json.load(f)
     except (OSError, ValueError):
         raise SetupError("--github-event needs a readable $GITHUB_EVENT_PATH")
+    if name == "pull_request" and CI:
+        # A pull_request run executes the PR's own copy of this scanner and workflow,
+        # so the PR decides the result: it cannot gate. Locally it is a dry run.
+        raise SetupError("a pull_request run executes the PR's own scanner, so it cannot gate; "
+                         "run --github-event from a pull_request_target workflow")
     if name in ("pull_request_target", "pull_request"):
         pr = ev.get("pull_request") or {}
         head = pr.get("head") or {}
@@ -674,41 +736,57 @@ def mode_github_event(sc):
         if not repo or (head.get("repo") or {}).get("full_name") != repo:
             sc.fork = True             # never scan (or answer about) an outside PR
             return "a PR from outside the repo, not scanned"
-        base = os.environ.get("GITHUB_SHA") or (pr.get("base") or {}).get("sha") or ""
+        # pull_request_target: GITHUB_SHA is the base branch tip. pull_request: it is the
+        # merge commit, which holds the PR head, so it would empty the range; use base.sha.
+        base = (pr.get("base") or {}).get("sha") or ""
+        if name == "pull_request_target":
+            base = os.environ.get("GITHUB_SHA") or base
         n = mode_range(sc, base, head.get("sha") or "")
         sc.ref_name("refs/heads/" + (head.get("ref") or ""), "PR head branch {}")
-        sc.message((pr.get("title") or "").encode("utf-8", "surrogateescape"), "PR title")
-        sc.message((pr.get("body") or "").encode("utf-8", "surrogateescape"), "PR body")
+        sc.message(text_bytes(pr.get("title") or ""), "PR title")
+        sc.message(text_bytes(pr.get("body") or ""), "PR body")
         return "%d PR commit(s), head branch, title and body" % n
     if name == "push":
         after = ev.get("after") or ""
         if NULL_SHA.match(after) or not after:
             return "a branch delete, nothing to scan"
-        n = mode_range(sc, ev.get("before") or "0", after)
+        before = ev.get("before") or "0"
+        if not NULL_SHA.match(before) and not sc.objs.info(before + "^{commit}"):
+            # A force-push (say, purging a leaked commit) leaves before out of the
+            # clone: scan all of after's history instead, a superset of what is new
+            # (commits() refuses it in a shallow clone, which lacks that history too).
+            warn("the push's before commit is not in this clone; scanning all of after's history")
+            before = "0"
+        n = mode_range(sc, before, after)
         return "%d pushed commit(s)" % n
-    raise SetupError("--github-event supports pull_request_target and push events only")
+    raise SetupError("--github-event supports pull_request_target, pull_request and push events only")
 
 
 def parse(argv):
     o = {"range": None, "pre_push": None, "url": None, "event": False, "all": False, "worktree": False,
          "refs": [], "envs": [], "files": []}
-    it = iter(argv)
+    args = list(argv)
 
     def need(flag):
-        try:
-            return next(it)
-        except StopIteration:
+        if not args:
             raise SetupError("%s needs a value" % flag)
-    for a in it:
+        return args.pop(0)
+    while args:
+        a = args.pop(0)
         flag, eq, val = a.partition("=")
         if a in ("-h", "--help"):
+            if len(argv) != 1:   # only a bare --help exits 0; with other args it is an error
+                raise SetupError("--help takes no other arguments")
             print(__doc__)
             sys.exit(0)
         elif a == "--range":
             o["range"] = (need(a), need(a))
         elif a == "--pre-push":
             o["pre_push"] = need(a)
-            o["url"] = next(it, "")   # git passes the destination URL as the hook's second argument
+            # git passes the destination URL as the hook's second argument. Always take it,
+            # even if it looks like a flag: a remote URL of "--help" must not print help.
+            # The URL is mandatory (see the docstring); git always supplies it to the hook.
+            o["url"] = args.pop(0) if args else ""
         elif a == "--github-event":
             o["event"] = True
         elif a == "--all":
@@ -789,7 +867,7 @@ def main(argv):
                 sc.entries(ls_tree("HEAD"), "HEAD")
             scope.append("every ref, tag and commit (%d), and HEAD's tree" % sc.commits(tips))
         for r in o["refs"]:
-            sc.ref_name(r)
+            sc.ref_name(os.fsencode(r))   # the exact bytes given, as the shell passed them
         for v in o["envs"]:
             sc.text_env(v)
         for f in o["files"]:

@@ -56,8 +56,17 @@ for d in plugins/*/; do
   [ -d "$d" ] && ALL_PLUGINS+=("$(basename "$d")")
 done
 
+LEAK_BASE="$BASE"
 if [ "$ALL" = 1 ]; then
   PLUGINS=("${ALL_PLUGINS[@]}")
+  # Only the local leak check uses the base here (CI skips it, as on origin/main).
+  # A missing --base is an error, as below; a missing default origin/main means
+  # scanning all of HEAD's history instead.
+  if [ "${GITHUB_ACTIONS:-}" != true ] && ! git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null; then
+    [ "$BASE_SET" = 0 ] || { echo "error: base ref '$BASE' not found" >&2; exit 2; }
+    echo "warning: $BASE not found; the leak check scans all of HEAD's history" >&2
+    LEAK_BASE=0000000000000000000000000000000000000000
+  fi
 else
   if [ "$BASE_SET" = 0 ]; then
     git fetch --quiet origin main 2>/dev/null || echo "warning: git fetch origin main failed; using local $BASE" >&2
@@ -209,10 +218,10 @@ if [ "${GITHUB_ACTIONS:-}" != true ]; then
     echo "warning: the installed pre-push hook differs from origin/main's scripts/pre-push; reinstall it (README, Leak check)" >&2
   fi
   if [ "$DRY" = 1 ]; then
-    echo "  would run: python3 -I scripts/leak-check --range $BASE HEAD --worktree"
+    echo "  would run: python3 -I scripts/leak-check --range $LEAK_BASE HEAD --worktree"
   else
     rc=0
-    python3 -I scripts/leak-check --range "$BASE" HEAD --worktree || rc=$?
+    python3 -I scripts/leak-check --range "$LEAK_BASE" HEAD --worktree || rc=$?
     case "$rc" in
       0) ;;
       1) echo "FAIL: leak check found a private term; no evals run, no marker written."; exit 4 ;;
