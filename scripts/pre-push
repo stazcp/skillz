@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# pre-push hook for this repo: refuse to publish a private term.
+#
+# Install it OUTSIDE any checkout, so every branch, worktree and old commit
+# runs it (a hook kept in the tree is missing wherever the tree lacks it):
+#   mkdir -p ~/.config/skillz/hooks
+#   git cat-file blob origin/main:scripts/pre-push > ~/.config/skillz/hooks/pre-push
+#   chmod +x ~/.config/skillz/hooks/pre-push
+#   git config core.hooksPath "$HOME/.config/skillz/hooks"     # in each clone
+#
+# It runs origin/main's scripts/leak-check, not the checkout's, and falls back
+# to the checkout's copy only when origin/main has none. The scanner checks
+# every commit the destination does not already have (git ls-remote), every
+# pushed ref name and annotated tag. Any hit or setup error blocks the push.
+set -u
+export GIT_NO_REPLACE_OBJECTS=1
+remote="${1:-}"; url="${2:-}"
+if [ -z "$remote" ]; then echo "pre-push: no remote given; refusing to push unchecked." >&2; exit 1; fi
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/skillz-pre-push.XXXXXX")" || exit 1
+trap 'rm -rf "$tmp"' EXIT
+if git cat-file -e refs/remotes/origin/main:scripts/leak-check 2>/dev/null; then
+  git cat-file blob refs/remotes/origin/main:scripts/leak-check > "$tmp/leak-check" || exit 1
+else
+  root="$(git rev-parse --show-toplevel 2>/dev/null)" || root=""
+  if [ -z "$root" ] || [ ! -f "$root/scripts/leak-check" ]; then
+    echo "pre-push: no scripts/leak-check in origin/main or this checkout; refusing to push unchecked." >&2
+    exit 1
+  fi
+  cp "$root/scripts/leak-check" "$tmp/leak-check" || exit 1
+fi
+python3 -I "$tmp/leak-check" --pre-push "$remote" "$url"

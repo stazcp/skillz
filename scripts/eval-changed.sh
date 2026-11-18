@@ -12,7 +12,14 @@
 #   $(git rev-parse --git-common-dir)/evals-passed/$(git rev-parse HEAD)
 # which a Claude Code hook checks before `gh pr create`. Keep that path stable.
 #
-# Exit: 0 pass, 1 an eval failed, 2 usage/setup error, 3 a real brain vault changed.
+# Before any eval runs it runs scripts/leak-check over every commit in
+# <base>..HEAD plus uncommitted and untracked files, so no marker is ever
+# written for a change that would publish a private term. It skips that only
+# when GITHUB_ACTIONS=true (the leak-check workflow does it there, with the
+# secret), and warns when this clone's pre-push hook is missing or stale.
+#
+# Exit: 0 pass, 1 an eval failed, 2 usage/setup error (no private term list
+#       included), 3 a real brain vault changed, 4 a private term found.
 set -euo pipefail
 
 BASE="origin/main"
@@ -21,7 +28,7 @@ ALL=0
 DRY=0
 CAP="3"   # USD per plugin (suite + reruns); cases cost ~$0.12-0.37 per run
 
-usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -189,6 +196,30 @@ run_eval() {
 json_cost() { [ -f "$1" ] && jq -r '.costUsd // 0' "$1" 2>/dev/null || echo 0; }
 # Failed = with-arm score below the default --threshold of 1.0.
 json_failed() { jq -r '.cases[] | select((.aggregates.score // 0) < 1) | .name' "$1" 2>/dev/null; }
+
+# Leak check first: it is free, and a leak makes every eval result moot.
+if [ "${GITHUB_ACTIONS:-}" != true ]; then
+  hooks="$(git config --type=path --get core.hooksPath || true)"
+  [ -n "$hooks" ] || hooks="$(git rev-parse --path-format=absolute --git-path hooks)"
+  case "$hooks" in /*) ;; *) hooks="$ROOT/$hooks" ;; esac
+  if [ ! -f "$hooks/pre-push" ] || [ ! -x "$hooks/pre-push" ] || ! grep -q leak-check "$hooks/pre-push"; then
+    echo "warning: this clone's pre-push leak check is not installed (no executable leak-check pre-push in $hooks); see README, Leak check" >&2
+  elif git cat-file -e refs/remotes/origin/main:scripts/pre-push 2>/dev/null \
+       && ! git cat-file blob refs/remotes/origin/main:scripts/pre-push | cmp -s - "$hooks/pre-push"; then
+    echo "warning: the installed pre-push hook differs from origin/main's scripts/pre-push; reinstall it (README, Leak check)" >&2
+  fi
+  if [ "$DRY" = 1 ]; then
+    echo "  would run: python3 -I scripts/leak-check --range $BASE HEAD --worktree"
+  else
+    rc=0
+    python3 -I scripts/leak-check --range "$BASE" HEAD --worktree || rc=$?
+    case "$rc" in
+      0) ;;
+      1) echo "FAIL: leak check found a private term; no evals run, no marker written."; exit 4 ;;
+      *) echo "error: leak check could not run (exit $rc); no evals run, no marker written." >&2; exit 2 ;;
+    esac
+  fi
+fi
 
 SUMMARY=()
 OVERALL=0
