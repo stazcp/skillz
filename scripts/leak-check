@@ -699,6 +699,9 @@ def mode_github_event(sc):
             return "a branch delete, nothing to scan"
         before = ev.get("before") or "0"
         if not NULL_SHA.match(before) and not sc.objs.info(before + "^{commit}"):
+            if git("rev-parse", "--is-shallow-repository").strip() == b"true":
+                # all of after's history is not here either, so the fallback would miss commits
+                raise SetupError("the push's before commit is not in this shallow clone; fetch full history")
             # A force-push (say, purging a leaked commit) leaves before out of the
             # clone: scan all of after's history instead, a superset of what is new.
             warn("the push's before commit is not in this clone; scanning all of after's history")
@@ -721,14 +724,17 @@ def parse(argv):
         a = args.pop(0)
         flag, eq, val = a.partition("=")
         if a in ("-h", "--help"):
+            if len(argv) != 1:   # only a bare --help exits 0; with other args it is an error
+                raise SetupError("--help takes no other arguments")
             print(__doc__)
             sys.exit(0)
         elif a == "--range":
             o["range"] = (need(a), need(a))
         elif a == "--pre-push":
             o["pre_push"] = need(a)
-            # git passes the destination URL as the hook's second argument; a --flag is not one.
-            o["url"] = "" if not args or args[0].startswith("--") else args.pop(0)
+            # git passes the destination URL as the hook's second argument. Always take it,
+            # even if it looks like a flag: a remote URL of "--help" must not print help.
+            o["url"] = args.pop(0) if args else ""
         elif a == "--github-event":
             o["event"] = True
         elif a == "--all":
