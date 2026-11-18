@@ -17,8 +17,11 @@ and replace refs are ignored (a repo with refs/replace/* or grafts is
 refused); UTF-8, cp1252, UTF-16 and UTF-32 are tried, and zip, gzip, zlib,
 bzip2 and xz content is opened. --pre-push also scans pushed ref names and
 annotated tags, and counts as already public only what the destination itself
-advertises. --github-event scans a PR's commits, head branch, title and body,
-or a push's before..after, and fails a PR from a fork without scanning it.
+advertises. --github-event scans a pull_request_target or pull_request PR's
+commits, head branch, title and body, or a push's before..after, and fails a
+PR from a fork without scanning it. Every mode but --pre-push claims the whole
+history it names, so it is refused (exit 2) in a shallow clone whose edge the
+walk reaches; fetch full history.
 
 Terms come from $PRIVATE_TERMS (newline-separated) when it is set, else from
 the file $PRIVATE_TERMS_FILE, default ${SKILLZ_CONTEXT:-~/.config/skillz}/
@@ -393,13 +396,29 @@ def refuse_replacements():
 
 # ---------- scanning ----------
 
-def text_bytes(s):
-    """str -> bytes for scanning. A lone surrogate (JSON allows one) is kept as
-    its 3 bytes, which decode to U+FFFD, so the text around it is still scanned."""
+def refuse_shallow_edge(shas):
+    """A walk that reaches a shallow clone's edge misses every commit past it."""
+    if git("rev-parse", "--is-shallow-repository").strip() != b"true":
+        return
     try:
-        return s.encode("utf-8", "surrogateescape")
-    except UnicodeEncodeError:
-        return s.encode("utf-8", "surrogatepass")
+        with open(git("rev-parse", "--git-path", "shallow").rstrip(b"\n"), "rb") as f:
+            edge = set(f.read().split())
+    except OSError:
+        raise SetupError("this clone is shallow and its shallow list is unreadable; fetch full history")
+    if edge.intersection(shas):
+        raise SetupError("this clone is shallow and the scan reaches its edge, so older commits "
+                         "would go unscanned; fetch full history (git fetch --unshallow)")
+
+
+SURROGATE = re.compile("[\ud800-\udfff]")
+
+
+def text_bytes(s):
+    """JSON text -> bytes for scanning. Each lone surrogate (JSON allows one)
+    becomes U+FFFD, which norm drops, so the text around it is still scanned
+    and no two of them can pair into a character that would hide a term (a
+    combining mark that NFKC folds into the term's last letter, say)."""
+    return SURROGATE.sub("\ufffd", s).encode("utf-8")
 
 
 class Scanner:
@@ -495,7 +514,9 @@ class Scanner:
             if status != "D" and not NULL_SHA.match(bsha) and mode not in (b"160000", b"040000"):
                 self.add((prefix + " file {}", path), self.blob(bsha))
 
-    def commits(self, include, exclude=()):
+    def commits(self, include, exclude=(), complete=True):
+        """Scan include minus exclude. complete: the caller claims all of that history
+        (not just what this clone holds), so a walk that reaches a shallow edge fails."""
         if not include:
             return 0
         revs = list(include) + ["^" + e for e in exclude]
@@ -504,6 +525,8 @@ class Scanner:
         if p.returncode != 0:
             raise SetupError("git rev-list failed")
         shas = p.stdout.split()
+        if complete:
+            refuse_shallow_edge(shas)
         for c in shas:
             self.commit(c.decode())
         return len(shas)
@@ -665,7 +688,8 @@ def mode_pre_push(sc, url, stdin):
         sc.target(local_sha, remote_ref, tips)
     if not tips:
         return 0
-    return sc.commits(tips, exclude + published_tips(sc, url))
+    # complete=False: commits past a shallow edge are not in this clone, so this push cannot send them.
+    return sc.commits(tips, exclude + published_tips(sc, url), complete=False)
 
 
 def mode_github_event(sc):
@@ -699,16 +723,14 @@ def mode_github_event(sc):
             return "a branch delete, nothing to scan"
         before = ev.get("before") or "0"
         if not NULL_SHA.match(before) and not sc.objs.info(before + "^{commit}"):
-            if git("rev-parse", "--is-shallow-repository").strip() == b"true":
-                # all of after's history is not here either, so the fallback would miss commits
-                raise SetupError("the push's before commit is not in this shallow clone; fetch full history")
             # A force-push (say, purging a leaked commit) leaves before out of the
-            # clone: scan all of after's history instead, a superset of what is new.
+            # clone: scan all of after's history instead, a superset of what is new
+            # (commits() refuses it in a shallow clone, which lacks that history too).
             warn("the push's before commit is not in this clone; scanning all of after's history")
             before = "0"
         n = mode_range(sc, before, after)
         return "%d pushed commit(s)" % n
-    raise SetupError("--github-event supports pull_request_target and push events only")
+    raise SetupError("--github-event supports pull_request_target, pull_request and push events only")
 
 
 def parse(argv):
@@ -815,7 +837,7 @@ def main(argv):
                 sc.entries(ls_tree("HEAD"), "HEAD")
             scope.append("every ref, tag and commit (%d), and HEAD's tree" % sc.commits(tips))
         for r in o["refs"]:
-            sc.ref_name(r)
+            sc.ref_name(os.fsencode(r))   # the exact bytes given, as the shell passed them
         for v in o["envs"]:
             sc.text_env(v)
         for f in o["files"]:
