@@ -11,7 +11,7 @@ Before each step, ask one thing: **do I already have what I need?**
 
 **Yes: do it here, no Agent.** That is:
 - answering or writing from what is in context: an answer, a decision between known options, a brief, a Slack message, a PR description;
-- acting: commit, push, PR creation, `gh` and Slack sends, issues;
+- acting: commit, push, PR creation, `gh` and Slack sends, issues, with the checks the action itself needs (`git status`/`git diff` before a commit, `gh pr view` before replying), which are acting, not gathering;
 - few-line edits to files already in context;
 - telling the user what their environment needs first (open a DB tunnel, log in, grant access).
 

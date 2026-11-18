@@ -1,5 +1,5 @@
 ---
 type: regex
 flags: i
-pattern: 'search[^\n]{0,40}\b4\b|\b4\b[^\n]{0,40}search'
+pattern: 'search(?:(?!auth|billing|catalog|notify)[^\n0-9]){0,30}\b4\b|search(?:(?!auth|billing|catalog|notify)[^\n]){0,60}retries[^\n0-9]{0,6}\b4\b'
 ---

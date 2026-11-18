@@ -1,5 +1,5 @@
 ---
 type: regex
 flags: i
-pattern: 'billing[^\n]{0,40}\b5\b|\b5\b[^\n]{0,40}billing'
+pattern: 'billing(?:(?!auth|catalog|search|notify)[^\n0-9]){0,30}\b5\b|billing(?:(?!auth|catalog|search|notify)[^\n]){0,60}retries[^\n0-9]{0,6}\b5\b'
 ---
