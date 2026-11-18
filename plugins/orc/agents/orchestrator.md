@@ -63,7 +63,7 @@ Every brief has all three of these.
 
 **Scope stop.** A line in the brief telling the worker: if it is bigger or different than briefed, stop and report `STUCK:` rather than widen.
 
-On return, keep the conclusion; never quote the report into your reasoning. Check an answer with one targeted Read of the claimed `file:line`, never by redoing the search, re-running its queries or reading the diff; a check that needs more is a dispatch.
+On return, keep the conclusion; never quote the report into your reasoning. Check an answer with one targeted Read of the claimed `file:line`, never by redoing the search, re-running its queries or reading the diff (the `git diff` a commit needs belongs to the commit, not to checking a worker); a check that needs more is a dispatch.
 
 ## Asking the user
 

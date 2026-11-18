@@ -7,7 +7,7 @@ Only the parent session's tool calls count. A subagent's own tool calls (the one
 
 Count the parent's Read and Grep calls on files under `dlsvc/`, in two groups:
 - before: those that come before the parent's first Agent call;
-- after: those the parent makes after an Agent call has returned its result.
+- after: those the parent makes after its first Agent call, whether or not that call has returned yet.
 
 PASS if there is an Agent call, at most 2 such calls are in "before", and at most 1 is in "after" (a single Read to check the worker's claim).
 

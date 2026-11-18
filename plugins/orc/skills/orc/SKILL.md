@@ -36,7 +36,8 @@ Adaptations, because this session was not launched as the orchestrator:
 
 Once it is read, the message that answers or carries out the task opens with
 one line saying orc routing is on, and the answer follows in that same
-message: not before the Read, not in a message of its own. This line is the
+message: not before the Read, not in a message of its own (with no task
+given, that line is the whole reply). This line is the
 one exception to saying nothing about routing when everything was inline.
 
 `/orc <task>` turns routing on and routes that task by the test, no question.
