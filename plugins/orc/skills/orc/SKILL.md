@@ -45,7 +45,7 @@ If you already have what it needs (an answer, a draft, a decision, a push,
 commit, PR, `gh` or Slack action with only the checks that action itself
 needs, a small edit), do it here. If it needs reading, searching or running
 anything, even one Grep, an Agent on the tier you pick (orc:tier-cheap to
-read a few files, orc:tier-fast for `gh` or git reads); the one exception is
+read a few files, orc:tier-fast or up for `gh` or git reads); the one exception is
 a single targeted Read of a `file:line` a worker cited, to check its claim.
 Ask only when the rules themselves say to: a Workflow without standing
 authorization, the first dispatch on a model stronger than the session's, or
