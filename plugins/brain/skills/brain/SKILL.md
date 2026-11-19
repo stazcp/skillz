@@ -29,15 +29,16 @@ is unset. A vault called `<name>` has its spec at `<home>/<name>.md` or
 files. `active.local` lets one machine pick a different default when the
 brain home is shared through git.
 
-    home="${BRAIN_HOME:-$HOME/.config/brain}"; echo "$home"; echo "$HOME"
-    ls "$home"/*.md "$home"/*/brain.md 2>/dev/null   # every vault (skip TEMPLATE)
-    cat "$home/active.local" 2>/dev/null || cat "$home/active" 2>/dev/null   # default vault
+    echo "${BRAIN_HOME:-$HOME/.config/brain}"; echo "$HOME"
 
-The first two lines printed are the brain home and `$HOME`. If the brain
-home starts with `~` (a `$BRAIN_HOME` set with a literal `~`), replace that
-`~` with the printed `$HOME` and run the listing again with the result. A
-brain home that is still not absolute is a setup error: say so in one line
-and stop.
+The first line is `<home>`, the second `$HOME`. If `<home>` starts with `~`
+(a `$BRAIN_HOME` set with a literal `~`), replace that `~` with the printed
+`$HOME`. A `<home>` that is still not absolute is a setup error: say so in
+one line and stop. Then list every vault with the Glob tool, not a shell
+glob (a pattern that matches nothing aborts the whole command under zsh):
+`<home>/*.md` and `<home>/*/brain.md`, skipping TEMPLATE. Read the default
+vault's name from `<home>/active.local`, or `<home>/active` when that
+doesn't exist, with the Read tool.
 
 - **`@<name>` given** (`/brain @personal …`): use that vault's spec.
 - **No `@`**: use the default vault. With neither file and exactly one
@@ -77,7 +78,9 @@ error: say so in one line and stop. Quote it in shell commands
 
 For a new machine or a new vault. Find candidates: any directory under `~`
 up to 4 levels deep that holds a `.obsidian/` folder, plus
-`~/Library/Mobile Documents/iCloud~md~obsidian/Documents/` on macOS. Show
+`~/Library/Mobile Documents/iCloud~md~obsidian/Documents/` on macOS. In
+every command and tool call, write these with the `$HOME` printed in §1 in
+place of `~`, and quote them in shell (the iCloud path has a space). Show
 them next to the specs that exist, and **ask** which spec each one is.
 A vault that isn't an Obsidian vault won't turn up here; ask for its path.
 Then either fix the spec's Path, or copy `vault-template.md` (next to this
