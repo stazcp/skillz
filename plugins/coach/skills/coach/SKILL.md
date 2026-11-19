@@ -16,13 +16,22 @@ sessions go all come from the coach config.
 
 ## 0. Load context — before the first word
 
-Your context folder is `$SKILLZ_CONTEXT`, or `~/.config/skillz` when that is
-unset. Read `<context>/coach.md` with the Read tool, not a shell command.
+First resolve the two folders to absolute paths. The Read, Write and Glob
+tools expand neither `$VARS` nor `~`, so get them from one shell call:
+
+    echo "${SKILLZ_CONTEXT:-$HOME/.config/skillz}"; echo "${BRAIN_HOME:-$HOME/.config/brain}"; echo "$HOME"
+
+The first line is `<context>`, your context folder; the second is `<home>`,
+the brain home; the third is `$HOME`. A line that starts with `~` means
+`$HOME` in its place; a line that is still not absolute (a relative path)
+is a setup error: say so in one line and stop. Use those absolute paths in
+every tool call below. Then read
+`<context>/coach.md` with the Read tool, not a shell command.
 
 - **Missing**, or the argument is `--setup`: run Setup (§5) and stop there.
 - It names a brain **Vault**. Resolve that vault's Path the way the brain
-  skill does (its spec at `${BRAIN_HOME:-~/.config/brain}/<vault>.md` or
-  `${BRAIN_HOME:-~/.config/brain}/<vault>/brain.md`). If
+  skill does (its spec at `<home>/<vault>.md` or `<home>/<vault>/brain.md`;
+  a Path written with a leading `~` means the `$HOME` printed above). If
   the spec or the Path is missing on this machine, say so in one line and
   offer `/brain --setup`. Don't coach blind and don't create folders.
 
@@ -32,9 +41,11 @@ Then read, quietly and in full:
    decisions).
 2. The three newest notes in the **Sessions** folder (by the date in the
    filename). The newest one's `## Commitments` is the check-in.
-3. If a topic was given, grep the vault for it
-   (`grep -rliF '<term>' <vault> --include='*.md'`, skip `.obsidian/` and
-   `.git/`) and read the hits that matter.
+3. If a topic was given, search the vault for it with the Grep tool, not
+   a shell grep (iCloud paths contain spaces and topics contain `'`):
+   path `<vault>`, glob `*.md`, case-insensitive, files only, the term's
+   regex characters escaped. Skip hits
+   under `.obsidian/` and `.git/`, and read the ones that matter.
 
 Never paste or summarize these notes back to the user. They already wrote
 them. Use them.
@@ -182,8 +193,7 @@ End with one question worth bringing to the next session.
 
 1. List the brain vaults with the Glob tool, not a shell glob (a pattern
    that matches nothing aborts the whole command under zsh): `<home>/*.md`
-   and `<home>/*/brain.md`. Glob expands neither `$VARS` nor `~`, so get
-   `<home>` as an absolute path first: `echo "${BRAIN_HOME:-$HOME/.config/brain}"`.
+   and `<home>/*/brain.md`, with the absolute `<home>` resolved in §0.
    Skip TEMPLATE. If there are none, stop and point to `/brain --setup`. Ask which
    vault holds career material. Usually it's the personal one, never a
    current employer's.
