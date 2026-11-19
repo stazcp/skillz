@@ -33,6 +33,12 @@ brain home is shared through git.
     ls "$home"/*.md "$home"/*/brain.md 2>/dev/null   # every vault (skip TEMPLATE)
     cat "$home/active.local" 2>/dev/null || cat "$home/active" 2>/dev/null   # default vault
 
+The first two lines printed are the brain home and `$HOME`. If the brain
+home starts with `~` (a `$BRAIN_HOME` set with a literal `~`), replace that
+`~` with the printed `$HOME` and run the listing again with the result. A
+brain home that is still not absolute is a setup error: say so in one line
+and stop.
+
 - **`@<name>` given** (`/brain @personal …`): use that vault's spec.
 - **No `@`**: use the default vault. With neither file and exactly one
   spec, use that one.
@@ -58,8 +64,9 @@ that file.
 The spec's **Path** is written with `~` so it travels between machines.
 The Read, Write, Edit, Glob and Grep tools don't expand `~`, so replace a
 leading `~` with the `$HOME` printed in §1 and use that absolute path as
-`<vault>` in every tool call. Quote it in shell commands (`"<vault>"`):
-iCloud paths contain spaces.
+`<vault>` in every tool call. A Path that is still not absolute is a setup
+error: say so in one line and stop. Quote it in shell commands
+(`"<vault>"`): iCloud paths contain spaces.
 
 - **It exists:** carry on silently.
 - **It doesn't** (new machine, cloud sync not finished, vault not cloned):
@@ -104,13 +111,13 @@ words.
   Bash sandbox blocks writes there, write through the Write and Edit tools
   and run git unsandboxed. If its Git line names a commit rule, commit after
   every change (the save and its daily-log line together) and check that it
-  landed with `git -C <vault> log -1 --format=%h`. If the spec says no git,
+  landed with `git -C "<vault>" log -1 --format=%h`. If the spec says no git,
   don't run git.
 - **Push only when the spec names a remote.** If the spec's Git line names a
   remote **and** the branch has an upstream
-  (`git -C <vault> rev-parse --abbrev-ref @{u}` succeeds), push after every
+  (`git -C "<vault>" rev-parse --abbrev-ref @{u}` succeeds), push after every
   commit, behind the key check below. Otherwise commit only. Push only to
-  that configured upstream, with a plain `git -C <vault> push`: no other
+  that configured upstream, with a plain `git -C "<vault>" push`: no other
   remote, no refspec, never `--force`. Never add a remote, change the repo's
   visibility, or add collaborators, apps, deploy keys or Actions.
 - **A blocked commit or push isn't worked around.** If the sandbox, a
@@ -118,7 +125,7 @@ words.
   run. Never turn signing off.
 - **Pre-push key check: mandatory before every push.**
   1. Scan the unpushed commits and the files just written:
-     `gitleaks git <vault> --log-opts="@{u}..HEAD" --redact --exit-code 1`
+     `gitleaks git "<vault>" --log-opts="@{u}..HEAD" --redact --exit-code 1`
      and `gitleaks dir "<file>" --redact --exit-code 1` for each file.
   2. **Any finding, gitleaks missing, or a scan that errors** (any non-zero
      exit): don't push. Keep the commit local and tell the user the kind of
@@ -127,7 +134,7 @@ words.
   3. Taking a secret out of an unpushed commit means amending or rewriting
      local commits. Tell the user and let them decide; never do it silently.
   4. Push only on a clean scan, then check that
-     `git -C <vault> status -sb` shows no "ahead".
+     `git -C "<vault>" status -sb` shows no "ahead".
 - **Never touch `.obsidian/`.** Read its config, don't write it.
 - **One-way out.** Nothing read from a vault goes to a repo, Slack, GitHub,
   Notion, an artifact or a work-facing output until it has been cleaned of
@@ -154,7 +161,8 @@ The spec's **Conventions** section decides filename, frontmatter and folders.
 Where it is silent, match a neighbouring note: read one before writing.
 
 - **Basenames must be unique**, because wikilinks resolve by basename. Check
-  with `find <vault> -name '<name>.md'`. Leave out `[ ] # ^ | \ / :`.
+  with the Glob tool, `**/<name>.md` in `<vault>`, not a shell `find` (names
+  contain `'`). Leave out `[ ] # ^ | \ / :`.
 - **Body**: a `# Title`, then the substance in short sections or bullets.
   Link related notes as `[[basename]]`, and PRs and issues as full URLs.
 - **Dates are absolute** (`2026-10-25`), never "yesterday".
@@ -207,11 +215,12 @@ to today's daily note.
 
 ## 7. Recall: `/brain ? <query>`
 
-1. Search the **chosen vault only**, with the Glob and Grep tools, not
-   shell `find` or `grep` (terms contain `'` or start with `-`): Glob
-   `**/*<term>*` in `<vault>` for filenames (try the lowercase and
-   capitalized forms), and Grep in `<vault>`, glob `*.md`, case-insensitive,
-   with line numbers, the term's regex characters escaped. Add synonyms and
+1. Search the **chosen vault only**. For filenames,
+   `find "<vault>" -iname '*<term>*'`, with each `'` in the term written as
+   `'\''` and each `*`, `?` or `[` as `\*`, `\?`, `\[`. For contents, the
+   Grep tool, not a shell grep (terms contain `'` or start with `-`): path
+   `<vault>`, glob `*.md`, case-insensitive, with line numbers, the term's
+   regex characters escaped. Add synonyms and
    related PR or issue numbers. Skip `.obsidian/` and `.git/`. Search another
    vault only if the user names it (`@<name>`), and never mix two vaults in
    one answer without saying which claim came from which.

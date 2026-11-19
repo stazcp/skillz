@@ -32,9 +32,10 @@ Grep tools expand neither `$VARS` nor `~`, so get them from one shell call:
 The first line is `$HOME`, the second `<home>` (the brain home), the third
 the working directory. A leading `~` in any path below (the brain home, a
 vault's Path, a `<path>` argument) means that `$HOME`. A `<path>` argument
-that is relative is taken from the working directory. A brain home or vault
-Path that is still not absolute is a setup error: say so in one line and
-stop. Use the absolute paths in every tool call, and quote them in shell
+that is relative is taken from the working directory. When a vault target
+(or the no-argument vault listing) needs the brain home, a brain home or
+vault Path that is still not absolute is a setup error: say so in one line
+and stop. Use the absolute paths in every tool call, and quote them in shell
 commands (`"<target>"`): iCloud paths contain spaces.
 
 | Argument | Target | How to find it |
@@ -72,8 +73,8 @@ file, function, flag, PR, issue or branch it names, and what it links to. For
 auto-memory, add its `MEMORY.md` line.
 
 Date a note by, in order: a frontmatter date; its latest `## YYYY-MM-DD`
-section; `git -C "<target>" log -1 --format=%as -- <file>` when the target is
-in git; else the file's mtime (`stat -f %Sm -t %F <file>`).
+section; `git -C "<target>" log -1 --format=%as -- "<file>"` when the target is
+in git; else the file's mtime (`stat -f %Sm -t %F "<file>"`).
 
 ### 2.2 Verify claims (read-only)
 
@@ -82,10 +83,10 @@ still so. Check against the repo or tool the note is about, never by memory:
 
 | The note names | Check |
 |---|---|
-| a file or folder | `test -e "<path>"` |
+| a file or folder | `test -e "<path>"`, a leading `~` in the note's path replaced with `$HOME` first (`~` doesn't expand inside quotes) |
 | a function, type, flag, env var, setting | the Grep tool in that repo, the name's regex characters escaped (a shell grep reads a leading `-` as a flag) |
 | a PR or issue | `gh pr view <n> --json state,mergedAt,title` / `gh issue view <n> --json state,title` |
-| a branch | `git branch -r --list '*<name>*'` |
+| a branch | `git branch -r --list '*<name>*'`, each `'` in the name written as `'\''` |
 | a command or tool | `command -v <tool>` |
 
 | Outcome | Plan entry |
