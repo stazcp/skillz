@@ -29,7 +29,7 @@ is unset. A vault called `<name>` has its spec at `<home>/<name>.md` or
 files. `active.local` lets one machine pick a different default when the
 brain home is shared through git.
 
-    home="${BRAIN_HOME:-$HOME/.config/brain}"
+    home="${BRAIN_HOME:-$HOME/.config/brain}"; echo "$home"; echo "$HOME"
     ls "$home"/*.md "$home"/*/brain.md 2>/dev/null   # every vault (skip TEMPLATE)
     cat "$home/active.local" 2>/dev/null || cat "$home/active" 2>/dev/null   # default vault
 
@@ -56,6 +56,10 @@ that file.
 ### Path on this machine
 
 The spec's **Path** is written with `~` so it travels between machines.
+The Read, Write, Edit, Glob and Grep tools don't expand `~`, so replace a
+leading `~` with the `$HOME` printed in §1 and use that absolute path as
+`<vault>` in every tool call. Quote it in shell commands (`"<vault>"`):
+iCloud paths contain spaces.
 
 - **It exists:** carry on silently.
 - **It doesn't** (new machine, cloud sync not finished, vault not cloned):
@@ -159,14 +163,15 @@ Where it is silent, match a neighbouring note: read one before writing.
 
 ## 5. Filing (automatic, don't ask)
 
-1. **Append before creating.** Grep for an existing note on the same topic
-   (`grep -rliF '<key term>' <vault> --include='*.md'`, quoting the glob). If
-   one fits, extend it the way the spec says (a dated `## YYYY-MM-DD` section
+1. **Append before creating.** Search for an existing note on the same
+   topic with the Grep tool, not a shell grep (terms contain `'` or start
+   with `-`): path `<vault>`, glob `*.md`, case-insensitive, files only, the
+   key term's regex characters escaped. If one fits, extend it the way the spec says (a dated `## YYYY-MM-DD` section
    by default) rather than making a near-duplicate.
 2. **Pick the folder** by the spec's filing rules. If it points at index
    notes inside the vault (a root index, area Home notes), read those: the
    vault's own description of itself beats any guess. Otherwise list the
-   folders (`find <vault> -maxdepth 2 -type d -not -path '*/.*'`) and choose
+   folders (`find "<vault>" -maxdepth 2 -type d -not -path '*/.*'`) and choose
    by topic, then by kind.
 3. **Nothing fits?** Use the spec's inbox folder. Don't invent a new
    top-level folder for one note.
@@ -202,8 +207,11 @@ to today's daily note.
 
 ## 7. Recall: `/brain ? <query>`
 
-1. Search the **chosen vault only**. Use `find <vault> -iname '*<term>*'`
-   and `grep -rniF '<term>' <vault> --include='*.md'`, plus synonyms and
+1. Search the **chosen vault only**, with the Glob and Grep tools, not
+   shell `find` or `grep` (terms contain `'` or start with `-`): Glob
+   `**/*<term>*` in `<vault>` for filenames (try the lowercase and
+   capitalized forms), and Grep in `<vault>`, glob `*.md`, case-insensitive,
+   with line numbers, the term's regex characters escaped. Add synonyms and
    related PR or issue numbers. Skip `.obsidian/` and `.git/`. Search another
    vault only if the user names it (`@<name>`), and never mix two vaults in
    one answer without saying which claim came from which.

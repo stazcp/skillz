@@ -24,12 +24,25 @@ is pointed at, one at a time, and moves nothing between them.
 
 ## 1. Targets — resolve these before anything else
 
+First resolve the folders to absolute paths. The Read, Write, Edit, Glob and
+Grep tools expand neither `$VARS` nor `~`, so get them from one shell call:
+
+    echo "$HOME"; echo "${BRAIN_HOME:-$HOME/.config/brain}"; pwd
+
+The first line is `$HOME`, the second `<home>` (the brain home), the third
+the working directory. A leading `~` in any path below (the brain home, a
+vault's Path, a `<path>` argument) means that `$HOME`. A `<path>` argument
+that is relative is taken from the working directory. A brain home or vault
+Path that is still not absolute is a setup error: say so in one line and
+stop. Use the absolute paths in every tool call, and quote them in shell
+commands (`"<target>"`): iCloud paths contain spaces.
+
 | Argument | Target | How to find it |
 |---|---|---|
 | nothing | ask | AskUserQuestion: which collection to dream, offering `memory`, each vault found below, and "a path" |
-| `memory` | Claude's auto-memory for this project | the directory the session names (`~/.claude/projects/<slug>/memory/`, index `MEMORY.md`); if none is named, `ls -d ~/.claude/projects/*/memory` and ask which |
-| `@<name>` | a brain vault | spec at `${BRAIN_HOME:-~/.config/brain}/<name>.md` or `<name>/brain.md`; the default vault's name is in `active.local`, else `active`, in that home |
-| `<path>` | a folder or one file of Markdown | as given; a folder is read recursively |
+| `memory` | Claude's auto-memory for this project | the directory the session names (`$HOME/.claude/projects/<slug>/memory/`, index `MEMORY.md`); if none is named, `ls -d "$HOME"/.claude/projects/*/memory` and ask which |
+| `@<name>` | a brain vault | spec at `<home>/<name>.md` or `<home>/<name>/brain.md`; the default vault's name is in `active.local`, else `active`, in that home |
+| `<path>` | a folder or one file of Markdown | as given, made absolute as above; a folder is read recursively |
 | `--plan-only` | modifier | write the plan, skip the backup and the question, apply nothing |
 
 Several targets may be given. Each is dreamed on its own: its own read,
@@ -59,7 +72,7 @@ file, function, flag, PR, issue or branch it names, and what it links to. For
 auto-memory, add its `MEMORY.md` line.
 
 Date a note by, in order: a frontmatter date; its latest `## YYYY-MM-DD`
-section; `git -C <target> log -1 --format=%as -- <file>` when the target is
+section; `git -C "<target>" log -1 --format=%as -- <file>` when the target is
 in git; else the file's mtime (`stat -f %Sm -t %F <file>`).
 
 ### 2.2 Verify claims (read-only)
@@ -69,8 +82,8 @@ still so. Check against the repo or tool the note is about, never by memory:
 
 | The note names | Check |
 |---|---|
-| a file or folder | `test -e <path>` |
-| a function, type, flag, env var, setting | `grep -rn '<name>'` in that repo (quote the pattern) |
+| a file or folder | `test -e "<path>"` |
+| a function, type, flag, env var, setting | the Grep tool in that repo, the name's regex characters escaped (a shell grep reads a leading `-` as a flag) |
 | a PR or issue | `gh pr view <n> --json state,mergedAt,title` / `gh issue view <n> --json state,title` |
 | a branch | `git branch -r --list '*<name>*'` |
 | a command or tool | `command -v <tool>` |
@@ -104,8 +117,8 @@ name or a caveat, it isn't a merge: keep both and link them instead.
 ### 2.4 Back up, then write the plan
 
 1. Make the backup directory, outside every git repo:
-   `~/.local/state/dream/<label>/<YYYYMMDD-HHMMSS>/` where `<label>` is
-   `memory-<slug>`, the vault's name, or the path's basename. Copy the target
+   `$HOME/.local/state/dream/<label>/<YYYYMMDD-HHMMSS>/`, with the `$HOME`
+   from §1, where `<label>` is `memory-<slug>`, the vault's name, or the path's basename. Copy the target
    into `before/` (`cp -R`). A vault's git history is not the backup; the
    copy is. If the sandbox blocks the copy, run that one `cp` unsandboxed and
    say so. Never back up into the target itself. `--plan-only` skips the
@@ -138,22 +151,22 @@ unsandboxed and say so. Then check:
 - every `[[link]]` resolves to a basename in the target, every
   `[Title](file.md)` to a file;
 - every file is in the index exactly once, no index line points nowhere;
-- `diff -rq <backup>/before <target>` lists only the planned changes.
+- `diff -rq "<backup>/before" "<target>"` lists only the planned changes.
 
 Anything else found at this check is undone from `before/`, not patched.
 
 ### 2.7 Commit (a vault whose spec names git)
 
 - Commit after the apply, one commit, with the spec's commit rule; check it
-  landed with `git -C <vault> log -1 --format=%h`. No git in the spec: no git.
+  landed with `git -C "<vault>" log -1 --format=%h`. No git in the spec: no git.
 - Push only when the spec names a remote **and** the branch has an upstream
-  (`git -C <vault> rev-parse --abbrev-ref @{u}`), with a plain
-  `git -C <vault> push`: no other remote, no refspec, never `--force`.
+  (`git -C "<vault>" rev-parse --abbrev-ref @{u}`), with a plain
+  `git -C "<vault>" push`: no other remote, no refspec, never `--force`.
 - **Pre-push key check first, every time:**
-  `gitleaks git <vault> --log-opts="@{u}..HEAD" --redact --exit-code 1`. Any
+  `gitleaks git "<vault>" --log-opts="@{u}..HEAD" --redact --exit-code 1`. Any
   finding, gitleaks missing, or a scan error: don't push; tell the user the
   rule and file (redacted), never the value. Clean scan: push, then
-  `git -C <vault> status -sb` must show no "ahead".
+  `git -C "<vault>" status -sb` must show no "ahead".
 - A commit or push the sandbox, a classifier or signing blocks is not worked
   around: give the user the exact command. Never turn signing off, never add
   a remote, never change visibility or collaborators.
@@ -258,6 +271,6 @@ One line per target: what was dreamed, counts (merged / resolved / retired /
 patterned / linked / indexed, and deleted for auto-memory), where the backup
 is, and for a vault the commit hash and the push result: `pushed`,
 `push blocked: <reason>`, or `no remote`. For example:
-`memory: 38 files → 31; 5 merged, 2 retired (deleted, listed), 1 pattern, MEMORY.md grouped under 6 headings; backup ~/.local/state/dream/memory-<slug>/20260101-073000/.`
+`memory: 38 files → 31; 5 merged, 2 retired (deleted, listed), 1 pattern, MEMORY.md grouped under 6 headings; backup $HOME/.local/state/dream/memory-<slug>/20260101-073000/.`
 or `work: 212 notes; 9 merged, 4 archived to Archive/, 2 unverified, Research/Research.md rebuilt; commit a1b2c3d, pushed.`
 Then the open questions, if any, one line each.
