@@ -43,8 +43,9 @@ Then read, quietly and in full:
    filename). The newest one's `## Commitments` is the check-in.
 3. If a topic was given, grep the vault for it
    (`grep -rliF '<term>' '<vault>' --include='*.md'`, the vault path
-   quoted, since iCloud paths contain spaces; skip `.obsidian/` and
-   `.git/`) and read the hits that matter.
+   quoted, since iCloud paths contain spaces, and any `'` in the term or
+   path written as `'\''`; skip `.obsidian/` and `.git/`) and read the
+   hits that matter.
 
 Never paste or summarize these notes back to the user. They already wrote
 them. Use them.
