@@ -119,10 +119,13 @@ name or a caveat, it isn't a merge: keep both and link them instead.
 
 1. Make the backup directory, outside every git repo:
    `$HOME/.local/state/dream/<label>/<YYYYMMDD-HHMMSS>/`, with the `$HOME`
-   from §1, where `<label>` is `memory-<slug>`, the vault's name, or the path's basename. Copy the target
-   into `before/` (`cp -R`). A vault's git history is not the backup; the
-   copy is. If the sandbox blocks the copy, run that one `cp` unsandboxed and
-   say so. Never back up into the target itself. `--plan-only` skips the
+   from §1, where `<label>` is `memory-<slug>`, the vault's name, or the
+   path's basename. Copy the target into `before/` (`cp -R`). A vault's git
+   history is not the backup; the copy is. If the sandbox blocks the copy,
+   run that one `cp` unsandboxed and say so. If the backup or `plan.md` still
+   can't be written, don't stop there: show the plan in the chat, say what
+   was blocked, and still end with §2.5's question. Nothing is applied until
+   the backup exists. Never back up into the target itself. `--plan-only` skips the
    copy, since nothing in the target will change; the plan still goes in
    that directory, and its Backup line says `none (plan only)`.
 2. Write `plan.md` next to `before/` with the Write tool, not a shell
