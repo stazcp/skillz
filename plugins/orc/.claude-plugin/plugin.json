@@ -1,6 +1,6 @@
 {
   "name": "orc",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Orchestrator: route each step on one test, \"do I already have what I need?\" Answering, drafting, deciding and acting stay in the main session; reading, searching, querying, testing and debugging go to the cheapest tier agent or a Workflow under a return contract, so the main context lasts for weeks.",
   "author": { "name": "Staz Christodoulakis", "url": "https://staz.ai" },
   "homepage": "https://github.com/stazcp/skillz",
