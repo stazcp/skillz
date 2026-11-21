@@ -30,11 +30,11 @@ Before each step, ask one thing: **do I already have what I need?**
 | Shape | When | How |
 |---|---|---|
 | **Inline** | You already have what you need (above) | Do it |
-| **Agent** | One piece, or 2-4 independent pieces, one round of results | One call per piece, `subagent_type: orc:tier-*`, all in one message to run in parallel. Editing Agents never share a checkout: disjoint files, or one at a time |
+| **Agent** | One piece, or 2-4 independent pieces, one round of results | One call per piece, `subagent_type: orc:tier-*`, no `name`, all in one message to run in parallel. Editing Agents running at once get `isolation: 'worktree'`; otherwise one at a time |
 | **Workflow** | About 5+ items, multi-stage work, adversarial verification, a process worth fixing in code | A script, `agentType: 'orc:tier-*'` per stage, one reduced result back. Load the host's Workflow authoring reference, if offered, first |
 | **fork** | Needs most of your context and produces much output | `subagent_type: fork` copies the conversation; avoid once it is large; return contract still applies |
 
-Workflow rules: stage roles from the tier table, cheaper in wide stages since cost multiplies by items; `schema` between stages; `pipeline` over `parallel`; whenever it edits, `isolation: 'worktree'` and a closing verify stage (a build or test per item on cheap or fast, plus tier-max refuters for costly-mistake work); reduce in code and return count, summary and the path of a detail file a final stage wrote.
+Workflow rules: stage roles from the tier table, cheaper in wide stages since cost multiplies by items; `schema` between stages; `pipeline` over `parallel`. Before an editing one, assign the issue and create a branch and worktree per item (or one per run) inline, passing absolute paths. Only agents editing the same worktree at once need `isolation: 'worktree'` (when unsure, isolate); stages editing in turn share it, as `isolation` leaves an auto-named branch. Close with a verify stage (a build or test per item on cheap or fast; tier-max refuters for costly-mistake work); checks report where they ran (toplevel, branch, head, exit code) for code to verify. A many-claim document or diff gets a review: 2-3 tier-max reviewers, one lens each, return findings (location, evidence, fix); a tier-strong fixer re-verifies each before applying, giving each rejection a reason; a tier-max verifier closes with the original and both lists. Every stage `schema` has a `private` field (suspected vulnerabilities): deduped in code, kept out of files, commit messages and PR bodies, and holding its item open. Reduce in code to count, summary and the path of a detail file a final stage writes; an editing run also returns a record per item (path, applied and rejected counts, what is left, `private`), about 10 in full for open items, the rest grouped by first error line.
 
 ## Tiers
 
@@ -51,7 +51,7 @@ Pick the lowest row that fits, on reasoning needed, not file count. On Opus, tie
 
 `effort` overrides a tier's default; say so in the brief. Down one step (strong or max only) for wide but shallow work; up one step after a failed attempt or when a fix must hold under load; up a tier when judgment is lacking, which effort does not buy.
 
-**Costly-mistake work** (security, data loss, concurrency, hard-to-undo design) is routed by the same test (a five-line fix in a file already in context stays inline), but before it is committed or acted on, 2-3 independent orc:tier-max refuters on the session's model try to break the conclusion, returning holds/refuted plus the strongest reason; cheap or fast tiers only re-run a repro a refuter names. Refute only findings that would trigger an edit, a deletion or a security conclusion; drop what fails and say so. Hard-to-undo design is drafted by tier-max under a return contract (under 15 lines plus a file list), refuted the same way, then adopted: you decide, you do not draft.
+**Costly-mistake work** (security, data loss, concurrency, hard-to-undo design) is routed by the same test (a five-line fix in a file already in context stays inline), but before it is committed or acted on, 2-3 independent orc:tier-max refuters on the session's model try to break the conclusion, returning holds/refuted plus the strongest reason (a many-claim document or diff gets the review pattern instead); cheap or fast tiers only re-run a repro a refuter names. Refute only findings that would trigger an edit, a deletion or a security conclusion; drop what fails and say so. Hard-to-undo design is drafted by tier-max under a return contract (under 15 lines plus a file list), refuted the same way, then adopted: you decide, you do not draft.
 
 ## Briefs
 
@@ -79,6 +79,7 @@ Recommended option first, marked "(Recommended)"; include "Do it here" when reas
 
 - "hand this off", "send it to orc:tier-fast", "use Fable for this": Agent with that tier, no question; your pick if unnamed.
 - "fan this out": parallel Agents for 2-4 pieces, a Workflow for more.
+- "agent team": only when the user asks for one by name; brief each teammate with the return contract.
 - "run a workflow": a Workflow, no question. "audit", "sweep": a Workflow when the target spans many files; one file or function is an Agent.
 - "orc off": say so in one line, then behave as a plain session until "orc on" restores these rules.
 

@@ -26,7 +26,7 @@ BASE="origin/main"
 BASE_SET=0
 ALL=0
 DRY=0
-CAP="3"   # USD per plugin (suite + reruns); cases cost ~$0.12-0.37 per run
+CAP="3"   # USD per plugin (suite + reruns); most cases cost ~$0.03-0.37 per run; orc review-fixes-page ~$0.73 (one orc pass ~$1.43)
 
 usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; }
 
@@ -94,6 +94,7 @@ grants_for() {
     presentation) GRANTS=(Write) ;;
     brain)        GRANTS=(Write Edit Bash) ;;
     dream)        GRANTS=(Write Edit Bash) ;;  # backup cp + plan.md outside the workspace; Edit applies an approved plan
+    orc)          GRANTS=(Workflow Edit Write) ;;  # review-fixes-page runs a Workflow whose stages edit the page
     *)            GRANTS=() ;;
   esac
 }

@@ -58,6 +58,17 @@ starts cold, with roughly 15–25k tokens of context. orc routes on one test,
 actions stay in your session; anything that reads, searches or runs goes to a
 worker, so your context keeps only conclusions.
 
+For a Workflow that edits, your session assigns the issue and creates a
+branch and worktree per item (or one for the run) first; stages that edit one
+after another share it, and only agents editing the same worktree at the same
+time get their own. A page or
+diff with many claims gets a review: 2-3 reviewers with different lenses
+return findings, a fixer re-checks each one before applying it, and a
+verifier closes. Each item comes back as one small record (path, findings
+applied and rejected, what is left). Suspected vulnerabilities go in a
+`private` field that never reaches the edited files, commit messages or PR
+bodies, and they keep the item open until you decide.
+
 ## brain
 
 Save notes to your Obsidian vaults, and recall them, from inside a session.

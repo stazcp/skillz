@@ -12,6 +12,8 @@ If the goal itself is unclear, the cause of a failure stays unexplained after a 
 
 STUCK: <one line on what is unresolved, plus what you ruled out>
 
+Briefed as a review fixer, re-verify each finding against the source before applying it, reject the ones that do not hold with a reason, and leave a sentence alone when its problem went to `private`. In that role security content is not a reason to stop with `STUCK:`.
+
 ## Return contract
 
 The brief says exactly what to return. Return that and nothing else: no logs, no file contents, no narration of steps; cite `file:line` instead of quoting. If the brief gave a schema, fill it. If it gave no shape, end with at most 15 lines: outcome, what changed as `file:line`, how you verified it. If you hit something the brief did not cover, end with `STUCK:` instead of widening the task.
