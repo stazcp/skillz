@@ -11,6 +11,7 @@ Claude Code plugins I use every day, for personal and work projects.
 /plugin install presentation@staz
 /plugin install standup@staz
 /plugin install coach@staz
+/plugin install subagent-branch@staz
 ```
 
 ## orc
@@ -67,7 +68,9 @@ return findings, a fixer re-checks each one before applying it, and a
 verifier closes. Each item comes back as one small record (path, findings
 applied and rejected, what is left). Suspected vulnerabilities go in a
 `private` field that never reaches the edited files, commit messages or PR
-bodies, and they keep the item open until you decide.
+bodies, and they keep the item open until you decide. Since each item gets its
+own branch, [subagent-branch](#subagent-branch) is worth installing to see
+which branch each agent is on.
 
 ## brain
 
@@ -176,9 +179,18 @@ Say "off the record" at any point and nothing is saved. Its config is
 [`coach-template.md`](plugins/coach/skills/coach/coach-template.md). It needs
 brain set up first.
 
+## subagent-branch
+
+A mod, not a skill. Each row in the subagent list starts with the git branch of
+that agent's working directory (cyan, cut to 24 characters), then its name,
+description and token count. A row with no branch (not a repo, detached HEAD)
+keeps the default look. It replaces the deprecated `subagentStatusLine`
+setting; remove that from your settings when you install it. orc does not need
+it.
+
 ## Evals
 
-Each plugin has a `claude plugin eval` suite under `plugins/<name>/evals/`
+Each skill plugin has a `claude plugin eval` suite under `plugins/<name>/evals/`
 (skill fires on its trigger, the output has the right shape, the never-post /
 never-publish rails hold). Fixtures are built by each case's `fixture.sh`, so
 pass `--scaffold`:
@@ -196,6 +208,10 @@ a real home directory. dream needs `--allow-tools Write Edit Bash`: Write and
 Bash for its backup and plan under the temp HOME, Edit to apply an approved plan
 (its `apply-after-yes` case replays the approval from `history.jsonl`); its
 fixtures have the same guard.
+
+subagent-branch has no skill to trigger, so it has no eval suite (eval-changed.sh
+skips it); its row rendering is covered by `claude plugin test
+plugins/subagent-branch`.
 
 `scripts/eval-changed.sh` runs the suites of the plugins changed against
 `origin/main` (committed and uncommitted), with those grants, in cheap mode

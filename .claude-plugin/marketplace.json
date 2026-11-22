@@ -37,6 +37,11 @@
       "name": "coach",
       "source": "./plugins/coach",
       "description": "A career coach with memory: reads your career notes and past sessions from your brain vault, checks last session's commitments, coaches question-first with a straight opinion when asked, and saves each session back to the vault."
+    },
+    {
+      "name": "subagent-branch",
+      "source": "./plugins/subagent-branch",
+      "description": "Shows each subagent's git branch at the start of its row in the agent list, replacing the deprecated subagentStatusLine setting."
     }
   ]
 }

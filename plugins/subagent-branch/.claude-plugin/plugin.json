@@ -1,0 +1,9 @@
+{
+  "name": "subagent-branch",
+  "version": "0.1.0",
+  "description": "Shows each subagent's git branch at the start of its row in the agent list, replacing the deprecated subagentStatusLine setting.",
+  "author": { "name": "Staz Christodoulakis", "url": "https://staz.ai" },
+  "homepage": "https://github.com/stazcp/skillz",
+  "repository": "https://github.com/stazcp/skillz",
+  "license": "MIT"
+}
