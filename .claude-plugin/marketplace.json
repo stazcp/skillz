@@ -37,6 +37,11 @@
       "name": "coach",
       "source": "./plugins/coach",
       "description": "A career coach with memory: reads your career notes and past sessions from your brain vault, checks last session's commitments, coaches question-first with a straight opinion when asked, and saves each session back to the vault."
+    },
+    {
+      "name": "pulse",
+      "source": "./plugins/pulse",
+      "description": "A compact boxed status board in the terminal for multi-step work: what is done, running, blocked, and the one thing that needs you. Replaces long prose progress reports."
     }
   ]
 }

@@ -11,6 +11,7 @@ Claude Code plugins I use every day, for personal and work projects.
 /plugin install presentation@staz
 /plugin install standup@staz
 /plugin install coach@staz
+/plugin install pulse@staz
 ```
 
 ## orc
@@ -175,6 +176,15 @@ Say "off the record" at any point and nothing is saved. Its config is
 `coach.md` in `$SKILLZ_CONTEXT` (default `~/.config/skillz`); see
 [`coach-template.md`](plugins/coach/skills/coach/coach-template.md). It needs
 brain set up first.
+
+## pulse
+
+`/pulse` prints a compact boxed status board in the terminal for multi-step
+work: the queue of units, the steps of the active one, and the one decision
+that needs you. Say "status" or "where are we" and it prints too, and it
+reprints on its own when something changes (a step finishes or fails, a PR is
+raised or merged). `✔` only for what it saw pass, no prose above the board,
+and detail only when you ask for a row.
 
 ## Evals
 
