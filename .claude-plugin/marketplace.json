@@ -9,6 +9,11 @@
       "description": "Orchestrator: keep working in your main session, and hand a piece to a cheaper or stronger tier agent only when it actually pays off."
     },
     {
+      "name": "orc-ledger",
+      "source": "./plugins/orc-ledger",
+      "description": "A status row for orc: one row above the prompt with this session's handoffs per tier and how many tier agents are still running. Optional; watches only; needs Claude Code 2.1.329 or later."
+    },
+    {
       "name": "brain",
       "source": "./plugins/brain",
       "description": "Save notes to, and recall them from, your Obsidian vaults: one vault per job plus a personal one, each with its own house rules."

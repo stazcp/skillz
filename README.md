@@ -14,6 +14,21 @@ Claude Code plugins I use every day, for personal and work projects.
 /plugin install pulse@staz
 ```
 
+Or, from a checkout of this repo, install them all in one go:
+
+```sh
+scripts/install.sh              # every plugin
+scripts/install.sh --with-mods  # every plugin, plus the optional mods
+```
+
+Mods are optional. A mod is a plugin that runs code inside Claude Code to
+change its interface; the only one here is [orc-ledger](#orc-ledger), a status
+row for orc, which needs Claude Code 2.1.329 or later. They are early access,
+so the plain install leaves them out. `--with-mods` adds them to an existing
+install and leaves out, with a note, any mod your Claude Code is too old for.
+`claude plugin uninstall orc-ledger@staz` takes one off again, and `--dry-run`
+prints the commands without running them.
+
 ## orc
 
 orc is short for orchestrator.
@@ -69,6 +84,27 @@ verifier closes. Each item comes back as one small record (path, findings
 applied and rejected, what is left). Suspected vulnerabilities go in a
 `private` field that never reaches the edited files, commit messages or PR
 bodies, and they keep the item open until you decide.
+
+## orc-ledger
+
+An optional mod that shows what orc is doing. While routing is on it draws one
+row above the prompt, with this session's handoffs per tier and how many tier
+agents are still running:
+
+```
+◆ orc  cheap 5 · fast 3  ● 1 running
+```
+
+After each turn that handed work off, it adds a one-line note naming the tiers
+used. It only watches: it never blocks a call or adds anything the model
+reads, so orc routes the same with or without it.
+
+```
+/plugin install orc-ledger@staz
+```
+
+It needs orc installed, and Claude Code 2.1.329 or later. See
+[its README](plugins/orc-ledger/README.md) for what turns the row on and off.
 
 ## brain
 
@@ -188,10 +224,12 @@ and detail only when you ask for a row.
 
 ## Evals
 
-Each plugin has a `claude plugin eval` suite under `plugins/<name>/evals/`
+Each skill plugin has a `claude plugin eval` suite under `plugins/<name>/evals/`
 (skill fires on its trigger, the output has the right shape, the never-post /
-never-publish rails hold). Fixtures are built by each case's `fixture.sh`, so
-pass `--scaffold`:
+never-publish rails hold). A mod has unit tests in place of evals: run
+`claude plugin validate plugins/orc-ledger` and `claude plugin test
+plugins/orc-ledger` (CI does not run these yet). Fixtures are built by each
+case's `fixture.sh`, so pass `--scaffold`:
 
 ```sh
 claude plugin eval plugins/orc --scaffold --runs 1
