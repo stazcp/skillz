@@ -8,7 +8,7 @@ name: leak-check
 #
 # This is the backstop, not the gate: on a public repo a branch, its commits
 # and a PR's title and body are public once pushed or opened. The gates are
-# local and run before publishing (README, Leak check).
+# local and run before publishing (docs/leak-check.md).
 #
 # pull_request_target runs THIS file and scanner from the base branch, with
 # the secret. The PR's commits are fetched as data only: nothing from the PR
