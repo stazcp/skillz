@@ -3,9 +3,11 @@
 [![leak-check](https://github.com/stazcp/skillz/actions/workflows/leak-check.yml/badge.svg?branch=main)](https://github.com/stazcp/skillz/actions/workflows/leak-check.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+**A stack that augments your harness with superpowers.**
+
 Claude Code plugins I use every day, for personal and work projects. Each one
-is a skill or an agent you install on its own; none needs the others, except
-where the table says so.
+is a skill, an agent or a mod you install on its own; none needs the others,
+except where the table says so.
 
 | Plugin | What it does |
 |---|---|
