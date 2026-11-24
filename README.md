@@ -1,6 +1,31 @@
 # Staz's skillz
 
-Claude Code plugins I use every day, for personal and work projects.
+[![leak-check](https://github.com/stazcp/skillz/actions/workflows/leak-check.yml/badge.svg?branch=main)](https://github.com/stazcp/skillz/actions/workflows/leak-check.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+Claude Code plugins I use every day, for personal and work projects. Each one
+is a skill or an agent you install on its own; none needs the others, except
+where the table says so.
+
+| Plugin | What it does |
+|---|---|
+| [orc](#orc) | An orchestrator: your main session keeps the work and hands a piece to a cheaper or stronger model only when that pays off |
+| [orc-ledger](#orc-ledger) | Optional mod for orc: a row above the prompt showing handoffs per tier and agents still running (needs orc) |
+| [brain](#brain) | Save notes to, and recall them from, your Obsidian vaults |
+| [dream](#dream) | Consolidate memory notes the way sleep does: merge, retire, index, from a plan you approve |
+| [review-pr](#review-pr) | Review someone else's pull request with an agent at your side, and approve the draft before anything is posted |
+| [presentation](#presentation) | Turn a dense doc or issue into a short animated HTML explainer |
+| [standup](#standup) | A Yesterday / Today / Blockers report from your real GitHub activity |
+| [coach](#coach) | A career coach with memory, kept in your brain vault (needs brain) |
+| [pulse](#pulse) | A boxed status board in the terminal for multi-step work |
+
+With orc and orc-ledger installed, the prompt shows what has been handed off:
+
+```
+◆ orc  cheap 5 · fast 3  ● 1 running
+```
+
+## Install
 
 ```
 /plugin marketplace add stazcp/skillz
@@ -222,39 +247,29 @@ reprints on its own when something changes (a step finishes or fails, a PR is
 raised or merged). `✔` only for what it saw pass, no prose above the board,
 and detail only when you ask for a row.
 
-## Evals
-
-Each skill plugin has a `claude plugin eval` suite under `plugins/<name>/evals/`
-(skill fires on its trigger, the output has the right shape, the never-post /
-never-publish rails hold). A mod has unit tests in place of evals: run
-`claude plugin validate plugins/orc-ledger` and `claude plugin test
-plugins/orc-ledger` (CI does not run these yet). Fixtures are built by each
-case's `fixture.sh`, so pass `--scaffold`:
-
-```sh
-claude plugin eval plugins/orc --scaffold --runs 1
-claude plugin eval plugins/standup --scaffold --runs 1 --allow-tools Bash
-claude plugin eval plugins/coach --scaffold --runs 1 --allow-tools Write Edit Bash
-claude plugin eval plugins/review-pr --scaffold --runs 1 --allow-tools "Bash(git *)"
+```text
+╭─ Report exports ─────────────────────────────────────────╮
+│                                                          │
+│  ◆  1  CSV export                needs you               │
+│  ·  2  PDF export                queued                  │
+│  ·  3  Email delivery            queued                  │
+│                                                          │
+├─ Layer 1 ────────────────────────────────────────────────┤
+│                                                          │
+│  build    ✔  done                                        │
+│  tests    ✔  212 passing                                 │
+│  browser  ✔  export downloads in 2s                      │
+│  review   ✖  dates show in the wrong timezone            │
+│  PR       ·  not raised                                  │
+│  merge    ·  —                                           │
+│                                                          │
+├─ Needs you ──────────────────────────────────────────────┤
+│                                                          │
+│  Convert export dates to UTC, or to the                  │
+│  account's timezone?                  UTC / account      │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
 ```
-
-presentation needs a bare `--allow-tools Write` to save its file. brain writes
-to a throwaway vault in the run's temp HOME; its fixture refuses to run against
-a real home directory. dream needs `--allow-tools Write Edit Bash`: Write and
-Bash for its backup and plan under the temp HOME, Edit to apply an approved plan
-(its `apply-after-yes` case replays the approval from `history.jsonl`); its
-fixtures have the same guard.
-
-`scripts/eval-changed.sh` runs the suites of the plugins changed against
-`origin/main` (committed and uncommitted), with those grants, in cheap mode
-(`--runs 1 --ablation none`), a per-plugin cost cap and one rerun of each
-failing case. `--all` runs every plugin, `--base <ref>` changes the base,
-`--max-cost-usd <usd>` sets the cap (default 3), `--dry-run` prints the
-commands. Locally it also snapshots your real brain vaults around the brain,
-presentation and coach suites and stops if one changed. A pass on a clean tree
-writes `$(git rev-parse --git-common-dir)/evals-passed/<HEAD sha>`. CI runs the
-same script as the `evals` check on every PR (needs the `CLAUDE_CODE_OAUTH_TOKEN`
-secret).
 
 ## Private settings
 
@@ -269,93 +284,23 @@ none, the skills fall back to safe defaults.
 | `presentation.md` | presentation | default output folder, how to save there, audience default |
 | `coach.md` | coach | the career vault, standing notes, sessions folder, preferences |
 | `private-terms` | `scripts/leak-check` | strings that must never reach this public repo, one per line |
-| `hooks/pre-push` | git, via `core.hooksPath` | the installed pre-push leak check (Leak check, below) |
+| `hooks/pre-push` | git, via `core.hooksPath` | the installed pre-push leak check ([docs/leak-check.md](docs/leak-check.md)) |
 
 Keep the folder wherever you keep private config (a dotfiles repo, say) and
 symlink it to `~/.config/skillz`. `brain` keeps its vault specs separately, in
 `~/.config/brain`.
 
-## Leak check
+## Development
 
-This repo is public; the notes and settings the skills read are not.
-`scripts/leak-check` fails on anything that would publish a term from a
-private list. It guards against accidental publication by the owner and the
-owner's agents, and against outsiders using CI to learn the list. It does not
-guard against the owner deliberately disguising a term (homoglyphs, base64,
-encryption).
+Each skill plugin has a `claude plugin eval` suite, and a mod has unit tests.
+`scripts/eval-changed.sh` runs the suites of whatever a branch changed, and CI
+runs it on every pull request. See [docs/evals.md](docs/evals.md).
 
-For every commit it scans the author, committer and message, the full new
-content of each file the commit adds or changes (raw bytes: `.gitattributes`
-and replace refs are ignored; UTF-8, UTF-16 and UTF-32 are decoded; zip, gzip,
-zlib, bzip2 and xz content is opened), every path and directory added,
-deleted or renamed, and symlink targets. It also scans ref names, annotated
-tags and any text you hand it. Terms and text are normalized alike (NFKC,
-case-folded, invisible characters dropped, whitespace and newlines
-collapsed), each file or message is matched whole, and further passes undo
-HTML, JSON/JS escapes, %-escapes and Markdown emphasis. In names and
-identities, `-`, `_`, `/`, `.` and Unicode dashes count as spaces. A commit
-message or PR text holding a CI skip instruction also fails, so the backstop
-can't be silenced. Output names where a term matched and its number in the
-list, never the term; on GitHub Actions it prints only a fixed line.
+This repo is public and the notes the skills read are not, so a leak check
+blocks any push, pull request or commit that would publish a term from a
+private list. See [docs/leak-check.md](docs/leak-check.md).
 
-On a public repo a branch, its commits and a PR's title and body are public
-the moment they are pushed or opened, so the gates run before publishing:
-
-1. **pre-push** (`scripts/pre-push`, installed outside the checkout so every
-   branch, worktree and old commit runs it): runs origin/main's scanner over
-   every commit the destination doesn't already have, every pushed branch
-   and tag name, and annotated tag messages. Install it once per machine and
-   enable it in each clone:
-
-   ```sh
-   mkdir -p ~/.config/skillz/hooks
-   git cat-file blob origin/main:scripts/pre-push > ~/.config/skillz/hooks/pre-push
-   chmod +x ~/.config/skillz/hooks/pre-push
-   git config core.hooksPath "$HOME/.config/skillz/hooks"
-   ```
-
-   `scripts/eval-changed.sh` warns when the hook is missing or stale, and
-   runs the scan itself.
-2. **Claude Code hook** (`leak-guard.sh`, kept in the owner's dotfiles):
-   blocks a `gh` command (PR, issue, release, `gh api`, ...) or a script run
-   whose text, or any file it names, holds a term, and a push here that
-   would skip the pre-push hook.
-3. **CI** (`leak-check` workflow, a required check): `pull_request_target`
-   runs the base branch's scanner over the PR's commits (fetched as data,
-   never run), head branch, title and body, read from the event file, never
-   from the log-visible step env. PRs from forks are not scanned and fail; a
-   maintainer re-opens them from a branch here. A push to `main` is
-   rescanned. Merges are squash-only, with the commit title and message
-   taken from the PR title and body, which this check has scanned.
-
-```sh
-python3 -I scripts/leak-check --range origin/main HEAD --worktree   # this branch
-python3 -I scripts/leak-check --all                                 # audit everything
-```
-
-Locally the terms come from `private-terms` in your private settings folder
-(above), one per line. Blank lines and `#` comments are skipped; write `\#`
-at the start of a term that begins with `#`. CI reads the `PRIVATE_TERMS`
-secret. GitHub masks a secret line by line, so set it from the filtered list
-(no comments, blank lines or surrounding spaces), never the raw file. Run
-this yourself, in your own terminal:
-
-```sh
-tr -d '\r' < ~/.config/skillz/private-terms | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^#/d' -e '/^$/d' | gh secret set PRIVATE_TERMS -R stazcp/skillz
-```
-
-Known limits: PR and issue comments, reviews, and releases made or edited
-in the GitHub web UI, or by a tool other than `gh` in Claude's Bash (a GitHub
-MCP server, say), are not checked (CI rescans a PR's title and body after an
-edit, but by then they are public); a push from a clone without the hook,
-or with it skipped, is caught only by CI, after the branch is public; Git LFS
-content is not scanned, only its pointer files; text inside images, PDFs'
-non-zlib streams, encrypted or other archive formats, or base64 is not
-decoded; a multi-word term written joined (`johnsmith` for "john smith"),
-or wrapped across quote- or comment-prefixed lines (`> john` / `> smith`,
-`# john` / `# smith`), does not match, so list the variants that matter; the Claude hook does not read
-scripts run through `make` or another interpreter (`python x.py`); `--all`
-may report history that predates the check.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the short version of both.
 
 ## License
 

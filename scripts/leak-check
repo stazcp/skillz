@@ -276,7 +276,7 @@ def load_terms():
                 raw = f.read()
         except OSError:
             raise SetupError("no private term list. Set PRIVATE_TERMS, or PRIVATE_TERMS_FILE, or create "
-                             "private-terms in your private settings folder (README, Leak check). A scan with "
+                             "private-terms in your private settings folder (docs/leak-check.md). A scan with "
                              "nothing to look for proves nothing, so this fails.")
     if raw.startswith(b"\xef\xbb\xbf"):
         raw = raw[3:]

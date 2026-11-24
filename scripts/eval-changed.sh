@@ -213,10 +213,10 @@ if [ "${GITHUB_ACTIONS:-}" != true ]; then
   [ -n "$hooks" ] || hooks="$(git rev-parse --path-format=absolute --git-path hooks)"
   case "$hooks" in /*) ;; *) hooks="$ROOT/$hooks" ;; esac
   if [ ! -f "$hooks/pre-push" ] || [ ! -x "$hooks/pre-push" ] || ! grep -q leak-check "$hooks/pre-push"; then
-    echo "warning: this clone's pre-push leak check is not installed (no executable leak-check pre-push in $hooks); see README, Leak check" >&2
+    echo "warning: this clone's pre-push leak check is not installed (no executable leak-check pre-push in $hooks); see docs/leak-check.md" >&2
   elif git cat-file -e refs/remotes/origin/main:scripts/pre-push 2>/dev/null \
        && ! git cat-file blob refs/remotes/origin/main:scripts/pre-push | cmp -s - "$hooks/pre-push"; then
-    echo "warning: the installed pre-push hook differs from origin/main's scripts/pre-push; reinstall it (README, Leak check)" >&2
+    echo "warning: the installed pre-push hook differs from origin/main's scripts/pre-push; reinstall it (docs/leak-check.md)" >&2
   fi
   if [ "$DRY" = 1 ]; then
     echo "  would run: python3 -I scripts/leak-check --range $LEAK_BASE HEAD --worktree"
