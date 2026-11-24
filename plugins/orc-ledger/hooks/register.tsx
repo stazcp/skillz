@@ -1,9 +1,9 @@
 import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, Register } from 'claude-code'
 
-import type { Ledger } from '../types'
+import type { Ledger, TreeAgent } from '../types'
 
-const EMPTY: Ledger = { turn: [], session: {}, running: [] }
+const EMPTY: Ledger = { turn: [], session: {}, running: [], agents: [] }
 const ORCHESTRATOR = 'orc:orchestrator'
 const SKILLS = new Set(['orc', 'orc:orc'])
 const TIER = /^orc:tier-/
@@ -13,6 +13,10 @@ const SWITCH = /^\s*orc (on|off)\s*[.!]?\s*$/i
 // Where a prompt is the person's own: typed here, from their other device, or
 // handed in by the program driving the session. Never a notification or a peer.
 const PERSON = new Set(['composer', 'bridge', 'sdk'])
+const COMMAND = 'orc-tree'
+// The tree keeps this many agents and draws at most this many lines.
+const KEPT = 40
+const LINES = 12
 
 // Cheapest first, each in a theme colour so the row follows the person's theme.
 const TIERS: readonly (readonly [string, Color])[] = [
@@ -24,25 +28,69 @@ const TIERS: readonly (readonly [string, Color])[] = [
   ['max-wide', 'claude'],
   ['all-out', 'error'],
 ]
+const MARK = {
+  running: ['▶', 'claude'],
+  done: ['✔', 'success'],
+  failed: ['✖', 'error'],
+} as const satisfies Record<TreeAgent['state'], readonly [string, Color]>
 
 const isOn = atom({ plugin: 'orc-ledger', key: 'isOn' } as const, false)
+const isTreeOpen = atom(
+  { plugin: 'orc-ledger', key: 'isTreeOpen' } as const,
+  false,
+)
 const ledger = atom({ plugin: 'orc-ledger', key: 'ledger' } as const, EMPTY, {
-  shape: 'ledger-3',
+  shape: 'ledger-4',
 })
 
-const short = (tier: string) => tier.replace('orc:tier-', '')
+const short = (type: string) => type.replace('orc:tier-', '')
+
+const colorOf = (type: string): Color | undefined =>
+  TIERS.find(([name]) => `orc:tier-${name}` === type)?.[1]
 
 const isOrchestrator = async ($: EngineInterface) =>
   (await $.session.info()).agentType === ORCHESTRATOR
 
+/** The tree's lines, parents before their children, with the branch drawn. */
+const lines = (agents: readonly TreeAgent[]) => {
+  const known = new Set(agents.map(one => one.id))
+  const out: { agent: TreeAgent; branch: string }[] = []
+  const walk = (parent: string | undefined, indent: string) => {
+    const children = agents.filter(one =>
+      parent === undefined
+        ? one.parent === undefined || !known.has(one.parent)
+        : one.parent === parent,
+    )
+    children.forEach((agent, i) => {
+      const isLast = i === children.length - 1
+      out.push({ agent, branch: `${indent}${isLast ? '└─' : '├─'}` })
+      walk(agent.id, `${indent}${isLast ? '   ' : '│  '}`)
+    })
+  }
+  walk(undefined, '')
+
+  return out
+}
+
 // This mod only watches: every hook passes the event on unchanged, and one
 // that fails is skipped, so orc behaves the same with or without it.
 export const register: Register = on => {
-  // Launched as the orchestrator, routing is on from the first turn.
   on('session.start', async ($, e, next) => {
+    await $.command.register({
+      name: COMMAND,
+      description: 'Show or hide the tree of agents orc has handed work to',
+    })
+    // Launched as the orchestrator, routing is on from the first turn.
     if (await isOrchestrator($)) await update($, isOn, () => true)
 
     return next(e)
+  })
+
+  // `/orc-tree` shows the tree under the row, and hides it again.
+  on('command.run', { command: COMMAND }, async $ => {
+    const isOpen = await update($, isTreeOpen, open => !open)
+
+    return { text: isOpen ? 'orc tree shown.' : 'orc tree hidden.' }
   })
 
   // A /clear or a resume puts another conversation in the same process: orc's
@@ -77,30 +125,46 @@ export const register: Register = on => {
   })
 
   // A tier agent the main conversation starts is one handoff, counted once it
-  // has really started: a refused or failed dispatch never gets an id.
+  // has really started: a refused or failed dispatch never gets an id. The
+  // tree also takes whatever a tier agent in it goes on to start.
   on('agent.spawn', async ($, e, next) => {
     const started = await next(e)
-    const tier = e.subagentType
+    const type = e.subagentType
     const id = started.agentId
-    const isHandoff =
-      e.parentAgentId === undefined &&
-      e.workflow === undefined &&
-      // A teammate never reports back here, so it could never stop running.
-      e.isTeammate !== true &&
-      TIER.test(tier) &&
-      id !== undefined
+    // A workflow stage or a teammate never reports back here, so it could
+    // never stop running.
+    const isTracked =
+      id !== undefined && e.workflow === undefined && e.isTeammate !== true
 
-    if (!isHandoff) return started
+    if (!isTracked) return started
 
+    const isHandoff = e.parentAgentId === undefined && TIER.test(type)
+    const { agents } = await read($, ledger)
+    const isChild = agents.some(one => one.id === e.parentAgentId)
+
+    if (!isHandoff && !isChild) return started
+
+    const startedAt = await $.clock.now()
+    const agent: TreeAgent = {
+      id,
+      parent: e.parentAgentId,
+      type,
+      label: e.description,
+      state: 'running',
+      startedAt,
+    }
     // A tier dispatch means routing is on, however it was turned on.
-    await update($, isOn, () => true)
+    if (isHandoff) await update($, isOn, () => true)
     await update($, ledger, l => ({
       // A resumed agent is running again, and is the handoff it already was.
-      turn: e.resume ? l.turn : [...l.turn, { tier, model: e.model }],
-      session: e.resume
-        ? l.session
-        : { ...l.session, [tier]: (l.session[tier] ?? 0) + 1 },
-      running: [...l.running.filter(one => one !== id), id],
+      turn:
+        isHandoff && !e.resume ? [...l.turn, { tier: type, model: e.model }] : l.turn,
+      session:
+        isHandoff && !e.resume
+          ? { ...l.session, [type]: (l.session[type] ?? 0) + 1 }
+          : l.session,
+      running: isHandoff ? [...l.running.filter(one => one !== id), id] : l.running,
+      agents: [...l.agents.filter(one => one.id !== id), agent].slice(-KEPT),
     }))
 
     return started
@@ -109,11 +173,20 @@ export const register: Register = on => {
   // An agent that reports back is no longer running; matched by id, so a
   // second report of the same agent changes nothing.
   on('agent.report', async ($, e, next) => {
-    await update($, ledger, l =>
-      l.running.includes(e.agentId)
-        ? { ...l, running: l.running.filter(one => one !== e.agentId) }
-        : l,
-    )
+    const now = await $.clock.now()
+    await update($, ledger, l => ({
+      ...l,
+      running: l.running.filter(one => one !== e.agentId),
+      agents: l.agents.map(one =>
+        one.id === e.agentId && one.state === 'running'
+          ? {
+              ...one,
+              state: e.status === 'completed' ? ('done' as const) : ('failed' as const),
+              seconds: Math.max(0, Math.round((now - one.startedAt) / 1000)),
+            }
+          : one,
+      ),
+    }))
 
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -134,18 +207,19 @@ export const register: Register = on => {
   })
 
   // One row above the prompt:  ◆ orc  cheap 3 · fast 1  ● 1 running
+  // and, while `/orc-tree` has it open, the tree of agents under it.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey || !(await read($, isOn))) return next(e)
 
     const { Box, Text } = $.ui.resolve(e)
-    const { session, running } = await read($, ledger)
+    const { session, running, agents } = await read($, ledger)
+    const isOpen = await read($, isTreeOpen)
     const counts = TIERS.flatMap(([name, color]) => {
       const n = session[`orc:tier-${name}`] ?? 0
 
       return n > 0 ? [{ name, color, n }] : []
     })
-
-    return (
+    const row = (
       <Box>
         <Text color="claude" bold>
           ◆ orc
@@ -164,6 +238,41 @@ export const register: Register = on => {
             {'  '}● {running.length} running
           </Text>
         )}
+      </Box>
+    )
+
+    if (!isOpen) return row
+
+    // The newest lines, as many as fit; the tree never crowds out the prompt.
+    const all = lines(agents)
+    const room = Math.max(1, Math.min(LINES, e.props.maxRows - 2))
+    const shown = all.slice(-room)
+    const width = Math.max(20, e.props.bodyColumns)
+
+    return (
+      <Box flexDirection="column">
+        {row}
+        {all.length === 0 && <Text dimColor>  no agents yet</Text>}
+        {all.length > shown.length && (
+          <Text dimColor>  … {all.length - shown.length} earlier</Text>
+        )}
+        {shown.map(({ agent, branch }) => {
+          const [mark, markColor] = MARK[agent.state]
+          const name = short(agent.type)
+          const time = agent.seconds === undefined ? '' : `  ${agent.seconds}s`
+          const used = 2 + branch.length + 3 + name.length + 2 + time.length
+          const label = agent.label.slice(0, Math.max(0, width - used))
+
+          return (
+            <Text>
+              <Text dimColor>  {branch} </Text>
+              <Text color={markColor}>{mark} </Text>
+              <Text color={colorOf(agent.type)}>{name}</Text>
+              <Text dimColor={agent.state !== 'running'}>  {label}</Text>
+              <Text dimColor>{time}</Text>
+            </Text>
+          )
+        })}
       </Box>
     )
   })

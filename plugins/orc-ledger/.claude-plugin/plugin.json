@@ -1,7 +1,7 @@
 {
   "name": "orc-ledger",
-  "version": "0.1.0",
-  "description": "A status row for orc: one row above the prompt showing that tier routing is on, this session's handoffs per tier and how many tier agents are still running, with a one-line note after each turn that handed work off. Watches only; changes nothing orc or the model does.",
+  "version": "0.2.0",
+  "description": "A status row for orc: one row above the prompt showing that tier routing is on, this session's handoffs per tier and how many tier agents are still running, with a one-line note after each turn that handed work off. /orc-tree shows the agents as a tree under the row and hides it again. Watches only; changes nothing orc or the model does.",
   "author": {
     "name": "Staz Christodoulakis",
     "url": "https://staz.ai"

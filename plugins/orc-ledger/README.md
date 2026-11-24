@@ -11,6 +11,21 @@ agents are still running:
 After each turn that handed work off, it adds a one-line note naming the
 tiers used.
 
+`/orc-tree` opens a tree of the agents under the row, and the same command
+hides it again, so it takes no space until you want it:
+
+```
+◆ orc  fast 1 · strong-wide 1  ● 1 running
+├─ ▶ strong-wide  Fix the flaky test
+│  ├─ ✔ cheap  Find callers  19s
+│  └─ ▶ Explore  Search logs
+└─ ✖ fast  Rename the flag  19s
+```
+
+`▶` is running, `✔` reported back, `✖` failed or was stopped, with how long
+each took. Anything a tier agent starts is nested under it. The tree keeps the
+last 40 agents and draws the newest 12 lines.
+
 It only watches. It never blocks a tool call, never adds text the model
 reads, and changes nothing about how orc routes, so orc behaves the same
 with or without it.
@@ -44,8 +59,9 @@ agent starting brings it back.
 
 Only agents the main conversation starts are counted, once each, when they
 have really started. A tier agent that fans out to other tiers does not add to
-the count, and neither does a dispatch that was refused. Workflow stages and
-teammates running on a tier are not counted either.
+the count (its agents show in the tree, nested under it), and neither does a
+dispatch that was refused. Workflow stages and teammates running on a tier are
+not counted, and are not in the tree.
 
 ## Develop
 

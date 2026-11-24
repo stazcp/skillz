@@ -123,8 +123,9 @@ agents are still running:
 ```
 
 After each turn that handed work off, it adds a one-line note naming the tiers
-used. It only watches: it never blocks a call or adds anything the model
-reads, so orc routes the same with or without it.
+used. `/orc-tree` opens a tree of the agents under the row, nested by who
+started whom, and hides it again. It only watches: it never blocks a call or
+adds anything the model reads, so orc routes the same with or without it.
 
 ```
 /plugin install orc-ledger@staz

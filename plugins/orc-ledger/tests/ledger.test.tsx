@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 const SPAWN = {
   tool_use_id: 't1',
@@ -38,10 +38,13 @@ const BAND = {
     view: {},
   },
 } as const
+const RUN = { origin: { kind: 'composer' }, presentation: {} as never } as const
 type Surface = 'terminal' | 'desktop' | 'vscode' | 'mobile'
 
 test('the row follows orc and counts handoffs per tier', async ($, on) => {
   const toasts: string[] = []
+  mock.clock(on)
+  on('command.register', () => ({ value: { command: 'orc-tree' } }))
   let agentType: string | undefined
   let next = 0
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -159,4 +162,84 @@ test('the row follows orc and counts handoffs per tier', async ($, on) => {
   await $.agent.spawn(SPAWN)
   await $.session.end({ ...end, reason: 'clear' })
   expect(await row()).toBe('◆ orc no handoffs yet')
+})
+
+test('/orc-tree shows the agents as a tree under the row, and hides it', async ($, on) => {
+  const clock = mock.clock(on)
+  let next = 0
+  on('command.register', () => ({ value: { command: 'orc-tree' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.info', () => ({ value: {} as never }))
+  on('skill.prompt', (_, e) => ({ text: e.text }))
+  on('agent.report', (_, e) => ({ text: e.text, review: 'none' as never }))
+  on('agent.spawn', () => ({ model: 'm', agentId: `a${(next += 1)}` }))
+
+  // Every line the band draws on a surface, top to bottom.
+  const band = async (surface: Surface = 'terminal') => {
+    const ui = await $.ui.mount({ ...BAND, surface })
+    const text = (await ui.find({ type: 'Box' }))?.text ?? ''
+    await ui.unmount()
+
+    return text
+  }
+  const squash = (text: string) => text.replace(/\s+/g, ' ').trim()
+  const tree = () => $.command.run({ command: 'orc-tree', args: '', ...RUN })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.skill.prompt({ skill: 'orc', text: 'rules' })
+
+  // Hidden until asked for; open and empty says so.
+  expect(squash(await band())).toBe('◆ orc no handoffs yet')
+  expect((await tree()).text).toBe('orc tree shown.')
+  expect(squash(await band())).toBe('◆ orc no handoffs yet no agents yet')
+
+  // A wide tier and what it fans out to, a second handoff, and one that fails.
+  await $.agent.spawn({ ...SPAWN, subagentType: 'orc:tier-strong-wide', description: 'Fix the flaky test' }) // a1
+  await $.agent.spawn({ ...SPAWN, parentAgentId: 'a1', description: 'Find callers' }) // a2
+  await $.agent.spawn({ ...SPAWN, parentAgentId: 'a1', subagentType: 'Explore', description: 'Search logs' }) // a3
+  await $.agent.spawn({ ...SPAWN, subagentType: 'orc:tier-fast', description: 'Rename the flag' }) // a4
+  // Another plugin's agent the main conversation starts is not orc's.
+  await $.agent.spawn({ ...SPAWN, subagentType: 'Explore', description: 'Unrelated' })
+  await clock.advance(19_000)
+  await $.agent.report({ ...REPORT, agentId: 'a2' })
+  await $.agent.report({ ...REPORT, agentId: 'a4', status: 'failed' })
+
+  for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
+    expect(squash(await band(surface))).toBe(
+      [
+        '◆ orc fast 1 · strong-wide 1 ● 1 running',
+        '├─ ▶ strong-wide Fix the flaky test',
+        '│ ├─ ✔ cheap Find callers 19s',
+        '│ └─ ▶ Explore Search logs',
+        '└─ ✖ fast Rename the flag 19s',
+      ].join(' '),
+    )
+  }
+
+  // Only the handoffs count in the row; the fan-out is in the tree alone.
+  expect(squash(await band())).toMatch(/^◆ orc fast 1 · strong-wide 1 ● 1 running/)
+
+  // The same command hides it again, and the row is all that is left.
+  expect((await tree()).text).toBe('orc tree hidden.')
+  expect(squash(await band())).toBe('◆ orc fast 1 · strong-wide 1 ● 1 running')
+})
+
+test('a long tree shows its newest lines and says how many are above', async ($, on) => {
+  mock.clock(on)
+  let next = 0
+  on('command.register', () => ({ value: { command: 'orc-tree' } }))
+  on('skill.prompt', (_, e) => ({ text: e.text }))
+  on('agent.spawn', () => ({ model: 'm', agentId: `a${(next += 1)}` }))
+
+  await $.skill.prompt({ skill: 'orc', text: 'rules' })
+  await $.command.run({ command: 'orc-tree', args: '', ...RUN })
+  for (let i = 1; i <= 15; i += 1) {
+    await $.agent.spawn({ ...SPAWN, description: `task ${i}` })
+  }
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /earlier/ }))?.text).toMatch(/… 7 earlier/)
+  expect(await ui.find({ type: 'Text', text: /task 7$/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /task 15/ })).toBeDefined()
+  await ui.unmount()
 })
