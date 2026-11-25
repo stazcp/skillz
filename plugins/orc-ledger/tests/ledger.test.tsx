@@ -1,4 +1,4 @@
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, test } from 'claude-code/testing'
 
 const SPAWN = {
   tool_use_id: 't1',
@@ -41,9 +41,8 @@ const BAND = {
 const RUN = { origin: { kind: 'composer' }, presentation: {} as never } as const
 type Surface = 'terminal' | 'desktop' | 'vscode' | 'mobile'
 
-test('the row follows orc and counts handoffs per tier', async ($, on) => {
+test('the row shows what is out right now, per tier', async ($, on) => {
   const toasts: string[] = []
-  mock.clock(on)
   on('command.register', () => ({ value: { command: 'orc-tree' } }))
   let agentType: string | undefined
   let next = 0
@@ -80,9 +79,9 @@ test('the row follows orc and counts handoffs per tier', async ($, on) => {
 
   // The orc skill loading turns the row on.
   await $.skill.prompt({ skill: 'orc:orc', text: 'rules' })
-  expect(await row()).toBe('◆ orc no handoffs yet')
+  expect(await row()).toBe('◆ orc idle')
 
-  // Tier agents the main conversation starts are counted, cheapest first:
+  // Tier agents the main conversation starts are out, cheapest first:
   // not another plugin's agent, a tier agent's own child, a refused one or a
   // teammate.
   await $.agent.spawn({ ...SPAWN, subagentType: 'orc:tier-fast', model: 'opus' }) // a1
@@ -99,34 +98,35 @@ test('the row follows orc and counts handoffs per tier', async ($, on) => {
   // A prompt folded into the running turn does not lose the turn's handoffs.
   await say('and check the tests too')
 
-  // An agent reporting back stops running, once, whoever else reports.
+  // An agent reporting back leaves the row, once, whoever else reports.
   await $.agent.report({ ...REPORT, agentId: 'a2' })
   await $.agent.report({ ...REPORT, agentId: 'a2' })
   await $.agent.report({ ...REPORT, agentId: 'zz' })
-  expect(await row()).toBe('◆ orc cheap 2 · fast 1 ● 2 running')
+  expect(await row()).toBe('◆ orc cheap 1 · fast 1 ● 2 running')
 
-  // A resumed agent runs again and is not a new handoff.
+  // A resumed agent is out again.
   await $.agent.spawn({ ...SPAWN, resume: { agentId: 'a2' } as never })
   expect(await row()).toBe('◆ orc cheap 2 · fast 1 ● 3 running')
   for (const agentId of ['a1', 'a2', 'a3']) {
     await $.agent.report({ ...REPORT, agentId })
   }
-  expect(await row()).toBe('◆ orc cheap 2 · fast 1')
+  expect(await row()).toBe('◆ orc idle')
 
-  // A tier agent's own turn ending says nothing; the main turn's end does.
+  // A tier agent's own turn ending says nothing; the main turn's end does,
+  // and the resumed agent was one handoff, not two.
   await $.turn.complete({ ...TURN, agentId: 'a1' })
   expect(toasts).toEqual([])
   await $.turn.complete(TURN)
   expect(toasts).toEqual(['orc handed off: cheap 2, fast 1'])
 
-  // Only "orc off" as the whole prompt hides the row; the count is kept.
+  // Only "orc off" as the whole prompt hides the row.
   for (const text of [
     'is orc off by default?',
     'Actually, orc off: no handoffs today.',
     'In the docs it says:\norc off\nwhat is that',
   ]) {
     await say(text)
-    expect(await row()).toBe('◆ orc cheap 2 · fast 1')
+    expect(await row()).toBe('◆ orc idle')
   }
   await say(' Orc off.\n')
   expect(await row()).toBe('')
@@ -142,7 +142,7 @@ test('the row follows orc and counts handoffs per tier', async ($, on) => {
   })
   expect(await row()).toBe('')
   await say('orc on')
-  expect(await row()).toBe('◆ orc cheap 2 · fast 1')
+  expect(await row()).toBe('◆ orc idle')
 
   // A turn with no handoff says nothing.
   await $.turn.complete(TURN)
@@ -151,6 +151,7 @@ test('the row follows orc and counts handoffs per tier', async ($, on) => {
   // /clear and a resume start over: off in a plain session, on and empty as
   // the orchestrator.
   const end = { sessionId: 's1', resume: {} as never }
+  await $.agent.spawn(SPAWN)
   await $.session.end({ ...end, reason: 'clear' })
   expect(await row()).toBe('')
   await say('orc on')
@@ -160,11 +161,10 @@ test('the row follows orc and counts handoffs per tier', async ($, on) => {
   agentType = 'orc:orchestrator'
   await $.agent.spawn(SPAWN)
   await $.session.end({ ...end, reason: 'clear' })
-  expect(await row()).toBe('◆ orc no handoffs yet')
+  expect(await row()).toBe('◆ orc idle')
 })
 
-test('/orc-tree shows the agents as a tree under the row, and hides it', async ($, on) => {
-  const clock = mock.clock(on)
+test('/orc-tree shows the agents that are out as a tree, and hides it', async ($, on) => {
   let next = 0
   on('command.register', () => ({ value: { command: 'orc-tree' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -179,60 +179,58 @@ test('/orc-tree shows the agents as a tree under the row, and hides it', async (
     const text = (await ui.find({ type: 'Box' }))?.text ?? ''
     await ui.unmount()
 
-    return text
+    return text.replace(/\s+/g, ' ').trim()
   }
-  const squash = (text: string) => text.replace(/\s+/g, ' ').trim()
   const tree = () => $.command.run({ command: 'orc-tree', args: '', ...RUN })
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.skill.prompt({ skill: 'orc', text: 'rules' })
 
-  // Hidden until asked for; open and empty says so.
-  expect(squash(await band())).toBe('◆ orc no handoffs yet')
-  expect((await tree()).text).toBe('orc tree shown.')
-  expect(squash(await band())).toBe('◆ orc no handoffs yet no agents yet')
+  // Hidden until asked for; open with nothing out, the row is all there is.
+  expect(await band()).toBe('◆ orc idle')
+  expect((await tree()).text).toBe('orc tree shown. No handoffs yet.')
+  expect(await band()).toBe('◆ orc idle')
 
-  // A wide tier and what it fans out to, a second handoff, and one that fails.
+  // A wide tier and what it fans out to, and a second handoff.
   await $.agent.spawn({ ...SPAWN, subagentType: 'orc:tier-strong-wide', description: 'Fix the flaky test' }) // a1
   await $.agent.spawn({ ...SPAWN, parentAgentId: 'a1', description: 'Find callers' }) // a2
   await $.agent.spawn({ ...SPAWN, parentAgentId: 'a1', subagentType: 'Explore', description: 'Search logs' }) // a3
   await $.agent.spawn({ ...SPAWN, subagentType: 'orc:tier-fast', description: 'Rename the flag' }) // a4
   // Another plugin's agent the main conversation starts is not orc's.
   await $.agent.spawn({ ...SPAWN, subagentType: 'Explore', description: 'Unrelated' })
-  await clock.advance(19_000)
-  await $.agent.report({ ...REPORT, agentId: 'a2' })
-  await $.agent.report({ ...REPORT, agentId: 'a4', status: 'failed' })
 
+  // Only the handoffs count in the row; the fan-out is in the tree alone.
   for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
-    expect(squash(await band(surface))).toBe(
+    expect(await band(surface)).toBe(
       [
-        '◆ orc fast 1 · strong-wide 1 ● 1 running',
+        '◆ orc fast 1 · strong-wide 1 ● 2 running',
         '├─ ▶ strong-wide Fix the flaky test',
-        '│ ├─ ✔ cheap Find callers 19s',
+        '│ ├─ ▶ cheap Find callers',
         '│ └─ ▶ Explore Search logs',
-        '└─ ✖ fast Rename the flag 19s',
+        '└─ ▶ fast Rename the flag',
       ].join(' '),
     )
   }
 
-  // Only the handoffs count in the row; the fan-out is in the tree alone.
-  expect(squash(await band())).toMatch(/^◆ orc fast 1 · strong-wide 1 ● 1 running/)
+  // An agent that is back, finished or failed, leaves the tree.
+  await $.agent.report({ ...REPORT, agentId: 'a2' })
+  await $.agent.report({ ...REPORT, agentId: 'a4', status: 'failed' })
+  expect(await band()).toBe(
+    [
+      '◆ orc strong-wide 1 ● 1 running',
+      '└─ ▶ strong-wide Fix the flaky test',
+      '└─ ▶ Explore Search logs',
+    ].join(' '),
+  )
 
-  // Past a minute a duration reads in minutes, and past an hour in hours.
-  await clock.advance(208_000)
-  await $.agent.report({ ...REPORT, agentId: 'a3' })
-  expect(squash(await band())).toMatch(/✔ Explore Search logs 3m 47s/)
-  await clock.advance(3_493_000)
-  await $.agent.report({ ...REPORT, agentId: 'a1' })
-  expect(squash(await band())).toMatch(/✔ strong-wide Fix the flaky test 1h 2m │/)
-
-  // The same command hides it again, and the row is all that is left.
-  expect((await tree()).text).toBe('orc tree hidden.')
-  expect(squash(await band())).toBe('◆ orc fast 1 · strong-wide 1')
+  // The same command hides it again, and its answer has the session's totals.
+  expect((await tree()).text).toBe(
+    'orc tree hidden. Handoffs so far: fast 1, strong-wide 1.',
+  )
+  expect(await band()).toBe('◆ orc strong-wide 1 ● 1 running')
 })
 
-test('a long tree shows its newest lines and says how many are above', async ($, on) => {
-  mock.clock(on)
+test('a long tree is cut and says how many more are out', async ($, on) => {
   let next = 0
   on('command.register', () => ({ value: { command: 'orc-tree' } }))
   on('skill.prompt', (_, e) => ({ text: e.text }))
@@ -245,14 +243,13 @@ test('a long tree shows its newest lines and says how many are above', async ($,
   }
 
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /earlier/ }))?.text).toMatch(/… 7 earlier/)
-  expect(await ui.find({ type: 'Text', text: /task 7$/ })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /task 15/ })).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /more/ }))?.text).toMatch(/… 7 more/)
+  expect(await ui.find({ type: 'Text', text: /task 8$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /task 9$/ })).toBeUndefined()
   await ui.unmount()
 })
 
 test('a workflow is one line with its stages still out under it', async ($, on) => {
-  const clock = mock.clock(on)
   const toasts: string[] = []
   let next = 0
   on('command.register', () => ({ value: { command: 'orc-tree' } }))
@@ -295,7 +292,7 @@ test('a workflow is one line with its stages still out under it', async ($, on) 
   await stage(3, 'orc:tier-max', 'refute #332') // a3
   await $.agent.spawn({ ...SPAWN, description: 'Count the tests' }) // a4
 
-  // Every stage is a handoff on its tier, and running until its turn ends.
+  // Every stage is a handoff on its tier, and out until its turn ends.
   expect(await band()).toBe(
     [
       '◆ orc cheap 1 · strong 2 · max 1 ● 4 running',
@@ -307,16 +304,14 @@ test('a workflow is one line with its stages still out under it', async ($, on) 
     ].join(' '),
   )
 
-  // A stage sends no report: its own turn ending is what marks it back. A
-  // finished stage leaves the list and is counted on the workflow's line.
-  await clock.advance(30_000)
+  // A stage sends no report: its own turn ending, however it ended, is what
+  // marks it back. It leaves the list and is counted on the workflow's line.
   await $.turn.complete({ ...TURN, agentId: 'a1' })
   await $.turn.complete({ ...TURN, agentId: 'a2', reason: 'error' })
   expect(await band()).toBe(
     [
-      '◆ orc cheap 1 · strong 2 · max 1 ● 2 running',
-      '├─ ▶ workflow triage-open-issues 1 of 3 back',
-      '│ ├─ ✖ strong investigate #315 30s',
+      '◆ orc cheap 1 · max 1 ● 2 running',
+      '├─ ▶ workflow triage-open-issues 2 of 3 back',
       '│ └─ ▶ max refute #332',
       '└─ ▶ cheap Count the tests',
     ].join(' '),
@@ -326,9 +321,9 @@ test('a workflow is one line with its stages still out under it', async ($, on) 
   await $.turn.complete({ ...TURN, agentId: 'a4' })
   expect(await band()).toMatch(/● 2 running/)
 
-  // With every stage back the workflow's line stands alone.
+  // With every stage back the workflow is gone from the tree.
   await $.turn.complete({ ...TURN, agentId: 'a3' })
-  expect(await band()).toMatch(/├─ ✖ workflow triage-open-issues 2 of 3 back │ └─ ✖ strong/)
+  expect(await band()).toBe('◆ orc cheap 1 ● 1 running └─ ▶ cheap Count the tests')
 
   // The main turn's note groups the handoffs by tier.
   await $.turn.complete(TURN)

@@ -12,7 +12,7 @@ except where the table says so.
 | Plugin | What it does |
 |---|---|
 | [orc](#orc) | An orchestrator: your main session keeps the work and hands a piece to a cheaper or stronger model only when that pays off |
-| [orc-ledger](#orc-ledger) | Optional mod for orc: a row above the prompt showing handoffs per tier and agents still running (needs orc) |
+| [orc-ledger](#orc-ledger) | Optional mod for orc: a row above the prompt showing the agents it has out right now, and a tree of them on request (needs orc) |
 | [brain](#brain) | Save notes to, and recall them from, your Obsidian vaults |
 | [dream](#dream) | Consolidate memory notes the way sleep does: merge, retire, index, from a plan you approve |
 | [review-pr](#review-pr) | Review someone else's pull request with an agent at your side, and approve the draft before anything is posted |
@@ -21,10 +21,10 @@ except where the table says so.
 | [coach](#coach) | A career coach with memory, kept in your brain vault (needs brain) |
 | [pulse](#pulse) | A boxed status board in the terminal for multi-step work |
 
-With orc and orc-ledger installed, the prompt shows what has been handed off:
+With orc and orc-ledger installed, the prompt shows what is out right now:
 
 ```
-◆ orc  cheap 5 · fast 3  ● 1 running
+◆ orc  strong 1 · max 2  ● 3 running
 ```
 
 ## Install
@@ -114,18 +114,20 @@ bodies, and they keep the item open until you decide.
 
 ## orc-ledger
 
-An optional mod that shows what orc is doing. While routing is on it draws one
-row above the prompt, with this session's handoffs per tier and how many tier
-agents are still running:
+An optional mod that shows what orc has out right now. While routing is on it
+draws one row above the prompt with the tier agents still running, per tier,
+and `idle` when there are none:
 
 ```
-◆ orc  cheap 5 · fast 3  ● 1 running
+◆ orc  strong 1 · max 2  ● 3 running
 ```
 
-After each turn that handed work off, it adds a one-line note naming the tiers
-used. `/orc-tree` opens a tree of the agents under the row, nested by who
-started whom, and hides it again. It only watches: it never blocks a call or
-adds anything the model reads, so orc routes the same with or without it.
+`/orc-tree` opens a tree of those agents under the row, nested by who started
+whom, with a workflow as one line and its stages still out under it; the same
+command hides it again. After each turn that handed work off, it adds a
+one-line note with that turn's handoffs per tier. It only watches: it never
+blocks a call or adds anything the model reads, so orc routes the same with or
+without it.
 
 ```
 /plugin install orc-ledger@staz

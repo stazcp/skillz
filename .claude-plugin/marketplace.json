@@ -11,7 +11,7 @@
     {
       "name": "orc-ledger",
       "source": "./plugins/orc-ledger",
-      "description": "A status row for orc: one row above the prompt with this session's handoffs per tier and how many tier agents are still running. Optional; watches only; needs Claude Code 2.1.329 or later."
+      "description": "A status row for orc: one row above the prompt showing the tier agents orc has out right now, and a tree of them on request. Optional; watches only; needs Claude Code 2.1.329 or later."
     },
     {
       "name": "brain",

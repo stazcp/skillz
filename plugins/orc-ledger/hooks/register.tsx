@@ -3,13 +3,7 @@ import type { Color, EngineInterface, Register } from 'claude-code'
 
 import type { Ledger, TreeAgent } from '../types'
 
-const EMPTY: Ledger = {
-  turn: [],
-  session: {},
-  running: [],
-  agents: [],
-  workflows: {},
-}
+const EMPTY: Ledger = { turn: [], session: {}, agents: [], workflows: {} }
 const ORCHESTRATOR = 'orc:orchestrator'
 const SKILLS = new Set(['orc', 'orc:orc'])
 const TIER = /^orc:tier-/
@@ -22,7 +16,7 @@ const PERSON = new Set(['composer', 'bridge', 'sdk'])
 const COMMAND = 'orc-tree'
 // The name a workflow script gives itself in its `meta` block.
 const META_NAME = /\bname:\s*['"`]([^'"`\n]{1,60})['"`]/
-// The tree keeps this many agents and draws at most this many lines.
+// How many agents are remembered, and the most lines the tree draws.
 const KEPT = 80
 const LINES = 12
 
@@ -36,20 +30,8 @@ const TIERS: readonly (readonly [string, Color])[] = [
   ['max-wide', 'claude'],
   ['all-out', 'error'],
 ]
-const MARK = {
-  running: ['▶', 'claude'],
-  done: ['✔', 'success'],
-  failed: ['✖', 'error'],
-} as const satisfies Record<TreeAgent['state'], readonly [string, Color]>
 
-type Line = {
-  branch: string
-  state: TreeAgent['state']
-  name: string
-  color?: Color
-  label: string
-  time: string
-}
+type Line = { branch: string; name: string; color?: Color; label: string; note: string }
 
 const isOn = atom({ plugin: 'orc-ledger', key: 'isOn' } as const, false)
 const isTreeOpen = atom(
@@ -57,7 +39,7 @@ const isTreeOpen = atom(
   false,
 )
 const ledger = atom({ plugin: 'orc-ledger', key: 'ledger' } as const, EMPTY, {
-  shape: 'ledger-5',
+  shape: 'ledger-6',
 })
 
 const short = (type: string) => type.replace('orc:tier-', '')
@@ -68,17 +50,6 @@ const colorOf = (type: string): Color | undefined =>
 const isOrchestrator = async ($: EngineInterface) =>
   (await $.session.info()).agentType === ORCHESTRATOR
 
-/** How long something took, in the largest two units: `8s`, `3m 47s`, `1h 2m`. */
-const took = (seconds: number) => {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
-  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`
-  if (m > 0) return s > 0 ? `${m}m ${s}s` : `${m}m`
-
-  return `${s}s`
-}
-
 /** Handoffs per tier, cheapest first: `cheap 2, strong 1`. */
 const tally = (tiers: readonly string[]) =>
   TIERS.flatMap(([name]) => {
@@ -87,35 +58,40 @@ const tally = (tiers: readonly string[]) =>
     return n > 0 ? [`${name} ${n}`] : []
   }).join(', ')
 
+/** The handoffs still out: tier agents the main conversation started. */
+const out = (l: Ledger) =>
+  l.agents.filter(
+    one => one.isRunning && one.parent === undefined && TIER.test(one.type),
+  )
+
 /**
- * The tree's lines, parents before their children, with the branch drawn.
- * A workflow is one line saying how many of its stages are back, with only
- * the stages still out (or failed) under it, so a run of twenty stays short.
+ * The tree's lines: only what is running now, parents before their children,
+ * with the branch drawn. A workflow is one line saying how many of its stages
+ * are back, with the stages still out under it.
  */
 const lines = (l: Ledger) => {
-  const { agents } = l
-  const known = new Set(agents.map(one => one.id))
-  const out: Line[] = []
+  const running = l.agents.filter(one => one.isRunning)
+  const known = new Set(running.map(one => one.id))
+  const drawn: Line[] = []
   const lineOf = (agent: TreeAgent, branch: string): Line => ({
     branch,
-    state: agent.state,
     name: short(agent.type),
     color: colorOf(agent.type),
     label: agent.label,
-    time: agent.seconds === undefined ? '' : took(agent.seconds),
+    note: '',
   })
   const walk = (parent: string, indent: string) => {
-    const children = agents.filter(one => one.parent === parent)
+    const children = running.filter(one => one.parent === parent)
     children.forEach((agent, i) => {
       const isLast = i === children.length - 1
-      out.push(lineOf(agent, `${indent}${isLast ? '└─' : '├─'}`))
+      drawn.push(lineOf(agent, `${indent}${isLast ? '└─' : '├─'}`))
       walk(agent.id, `${indent}${isLast ? '   ' : '│  '}`)
     })
   }
   // The top level, in the order things started: an agent of its own, or a
   // workflow run standing for all of its stages.
   const tops: (TreeAgent | string)[] = []
-  for (const agent of agents) {
+  for (const agent of running) {
     const isTop = agent.parent === undefined || !known.has(agent.parent)
     if (!isTop) continue
     if (agent.run === undefined) tops.push(agent)
@@ -126,49 +102,41 @@ const lines = (l: Ledger) => {
     const branch = isLast ? '└─' : '├─'
     const indent = isLast ? '   ' : '│  '
     if (typeof top !== 'string') {
-      out.push(lineOf(top, branch))
+      drawn.push(lineOf(top, branch))
       walk(top.id, indent)
 
       return
     }
-    const stages = agents.filter(one => one.run === top)
-    const out_ = stages.filter(one => one.state !== 'done')
-    const isRunning = stages.some(one => one.state === 'running')
-    const hasFailed = stages.some(one => one.state === 'failed')
-    out.push({
+    const stages = l.agents.filter(one => one.run === top)
+    const left = stages.filter(one => one.isRunning)
+    drawn.push({
       branch,
-      state: isRunning ? 'running' : hasFailed ? 'failed' : 'done',
       name: 'workflow',
       label: l.workflows[top] ?? '',
-      time: `${stages.length - out_.length} of ${stages.length} back`,
+      note: `${stages.length - left.length} of ${stages.length} back`,
     })
-    out_.forEach((agent, j) => {
-      const isLastStage = j === out_.length - 1
-      out.push(lineOf(agent, `${indent}${isLastStage ? '└─' : '├─'}`))
+    left.forEach((agent, j) => {
+      const isLastStage = j === left.length - 1
+      drawn.push(lineOf(agent, `${indent}${isLastStage ? '└─' : '├─'}`))
       walk(agent.id, `${indent}${isLastStage ? '   ' : '│  '}`)
     })
   })
 
-  return out
+  return drawn
 }
 
-/** Marks one agent back, once: a second word about it changes nothing. */
-const back = async ($: EngineInterface, id: string, state: 'done' | 'failed') => {
-  const now = await $.clock.now()
-  await update($, ledger, l => ({
-    ...l,
-    running: l.running.filter(one => one !== id),
-    agents: l.agents.map(one =>
-      one.id === id && one.state === 'running'
-        ? {
-            ...one,
-            state,
-            seconds: Math.max(0, Math.round((now - one.startedAt) / 1000)),
-          }
-        : one,
-    ),
-  }))
-}
+/** Marks one agent back; a second word about it changes nothing. */
+const back = ($: EngineInterface, id: string) =>
+  update($, ledger, l =>
+    l.agents.some(one => one.id === id && one.isRunning)
+      ? {
+          ...l,
+          agents: l.agents.map(one =>
+            one.id === id ? { ...one, isRunning: false } : one,
+          ),
+        }
+      : l,
+  )
 
 // This mod only watches: every hook passes the event on unchanged, and one
 // that fails is skipped, so orc behaves the same with or without it.
@@ -176,7 +144,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: COMMAND,
-      description: 'Show or hide the tree of agents orc has handed work to',
+      description: 'Show or hide the tree of agents orc has out right now',
     })
     // Launched as the orchestrator, routing is on from the first turn.
     if (await isOrchestrator($)) await update($, isOn, () => true)
@@ -184,16 +152,22 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // `/orc-tree` shows the tree under the row, and hides it again.
+  // `/orc-tree` shows the tree under the row, and hides it again. Its answer
+  // is where the session's totals are, for when the cost picture is wanted.
   on('command.run', { command: COMMAND }, async $ => {
     const isOpen = await update($, isTreeOpen, open => !open)
+    const { session } = await read($, ledger)
+    const total = tally(
+      Object.entries(session).flatMap(([tier, n]) => Array<string>(n).fill(tier)),
+    )
+    const sofar = total === '' ? 'No handoffs yet' : `Handoffs so far: ${total}`
 
-    return { text: isOpen ? 'orc tree shown.' : 'orc tree hidden.' }
+    return { text: `orc tree ${isOpen ? 'shown' : 'hidden'}. ${sofar}.` }
   })
 
   // A /clear or a resume puts another conversation in the same process: orc's
   // rules left with the old one unless the session itself runs as the
-  // orchestrator, and its counts are not the new one's.
+  // orchestrator, and its agents are not the new one's.
   on('session.end', async ($, e, next) => {
     if (e.reason === 'clear' || e.reason === 'resume') {
       const stays = await isOrchestrator($)
@@ -236,8 +210,8 @@ export const register: Register = on => {
 
   // A tier agent the main conversation starts, by itself or as a workflow's
   // stage, is one handoff, counted once it has really started: a refused or
-  // failed dispatch never gets an id. The tree also takes whatever a tier
-  // agent in it goes on to start.
+  // failed dispatch never gets an id. Whatever a tier agent goes on to start
+  // is remembered too, for the tree.
   on('agent.spawn', async ($, e, next) => {
     const started = await next(e)
     const type = e.subagentType
@@ -252,7 +226,6 @@ export const register: Register = on => {
 
     if (!isHandoff && !isChild) return started
 
-    const startedAt = await $.clock.now()
     const run = e.workflow?.runId
     const agent: TreeAgent = {
       id,
@@ -260,8 +233,7 @@ export const register: Register = on => {
       run,
       type,
       label: e.description,
-      state: 'running',
-      startedAt,
+      isRunning: true,
     }
     // A tier dispatch means routing is on, however it was turned on.
     if (isHandoff) await update($, isOn, () => true)
@@ -272,7 +244,6 @@ export const register: Register = on => {
         isHandoff && !e.resume
           ? { ...l.session, [type]: (l.session[type] ?? 0) + 1 }
           : l.session,
-      running: isHandoff ? [...l.running.filter(one => one !== id), id] : l.running,
       agents: [...l.agents.filter(one => one.id !== id), agent].slice(-KEPT),
       workflows:
         run === undefined || l.workflows[run] !== undefined
@@ -285,7 +256,7 @@ export const register: Register = on => {
 
   // An agent that reports back is no longer running.
   on('agent.report', async ($, e, next) => {
-    await back($, e.agentId, e.status === 'completed' ? 'done' : 'failed')
+    await back($, e.agentId)
 
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -301,22 +272,24 @@ export const register: Register = on => {
       }
     } else if (agents.some(one => one.id === e.agentId && one.run !== undefined)) {
       // A workflow's stage sends no report: its own turn ending is all there is.
-      await back($, e.agentId, e.reason === 'answer' ? 'done' : 'failed')
+      await back($, e.agentId)
     }
 
     return next(e)
   })
 
-  // One row above the prompt:  ◆ orc  cheap 3 · fast 1  ● 1 running
-  // and, while `/orc-tree` has it open, the tree of agents under it.
+  // One row above the prompt, for what is out right now:
+  //   ◆ orc  strong 1 · max 1  ● 2 running        ◆ orc  idle
+  // and, while `/orc-tree` has it open, those agents as a tree under it.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey || !(await read($, isOn))) return next(e)
 
     const { Box, Text } = $.ui.resolve(e)
     const l = await read($, ledger)
     const isOpen = await read($, isTreeOpen)
+    const handoffs = out(l)
     const counts = TIERS.flatMap(([name, color]) => {
-      const n = l.session[`orc:tier-${name}`] ?? 0
+      const n = handoffs.filter(one => one.type === `orc:tier-${name}`).length
 
       return n > 0 ? [{ name, color, n }] : []
     })
@@ -326,7 +299,7 @@ export const register: Register = on => {
           ◆ orc
         </Text>
         <Text>{'  '}</Text>
-        {counts.length === 0 && <Text dimColor>no handoffs yet</Text>}
+        {handoffs.length === 0 && <Text dimColor>idle</Text>}
         {counts.map(({ name, color, n }, i) => (
           <Text>
             {i > 0 && <Text dimColor> · </Text>}
@@ -334,9 +307,9 @@ export const register: Register = on => {
             <Text bold> {n}</Text>
           </Text>
         ))}
-        {l.running.length > 0 && (
+        {handoffs.length > 0 && (
           <Text color="claude">
-            {'  '}● {l.running.length} running
+            {'  '}● {handoffs.length} running
           </Text>
         )}
       </Box>
@@ -344,36 +317,34 @@ export const register: Register = on => {
 
     if (!isOpen) return row
 
-    // The newest lines, as many as fit; the tree never crowds out the prompt.
+    // As many lines as fit; the tree never crowds out the prompt.
     const all = lines(l)
     const room = Math.max(1, Math.min(LINES, e.props.maxRows - 2))
-    const shown = all.slice(-room)
+    const shown = all.slice(0, room)
     const width = Math.max(20, e.props.bodyColumns)
 
     return (
       <Box flexDirection="column">
         {row}
-        {all.length === 0 && <Text dimColor>  no agents yet</Text>}
-        {all.length > shown.length && (
-          <Text dimColor>  … {all.length - shown.length} earlier</Text>
-        )}
-        {shown.map(({ branch, state, name, color, label, time }) => {
-          const [mark, markColor] = MARK[state]
-          const used = 2 + branch.length + 3 + name.length + 2 + 2 + time.length
+        {shown.map(({ branch, name, color, label, note }) => {
+          const used = 2 + branch.length + 3 + name.length + 2 + 2 + note.length
           const text = label.slice(0, Math.max(0, width - used))
 
           return (
             <Text>
               <Text dimColor>  {branch} </Text>
-              <Text color={markColor}>{mark} </Text>
+              <Text color="claude">▶ </Text>
               <Text color={color} bold={color === undefined}>
                 {name}
               </Text>
-              {text !== '' && <Text dimColor={state !== 'running'}>  {text}</Text>}
-              {time !== '' && <Text dimColor>  {time}</Text>}
+              {text !== '' && <Text>  {text}</Text>}
+              {note !== '' && <Text dimColor>  {note}</Text>}
             </Text>
           )
         })}
+        {all.length > shown.length && (
+          <Text dimColor>  … {all.length - shown.length} more</Text>
+        )}
       </Box>
     )
   })

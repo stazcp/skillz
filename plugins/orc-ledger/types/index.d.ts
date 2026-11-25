@@ -1,4 +1,4 @@
-/** One agent in the tree: a tier agent, or anything a tier agent started. */
+/** One agent orc knows about: a tier agent, or anything a tier agent started. */
 export type TreeAgent = {
   id: string
   /** The agent that started it; absent when the main conversation did. */
@@ -9,10 +9,7 @@ export type TreeAgent = {
   type: string
   /** The dispatch's short description of the task. */
   label: string
-  state: 'running' | 'done' | 'failed'
-  startedAt: number
-  /** Whole seconds it ran for, once it is back. */
-  seconds?: number
+  isRunning: boolean
 }
 
 export type Ledger = {
@@ -20,9 +17,7 @@ export type Ledger = {
   turn: string[]
   /** Handoffs per tier across the session. */
   session: Record<string, number>
-  /** Ids of the tier agents started from the main conversation and not yet back. */
-  running: string[]
-  /** The most recent agents, oldest first, for the tree. */
+  /** The most recent agents, oldest first; the row and tree show the running ones. */
   agents: TreeAgent[]
   /** Workflow names: by the tool call that started one, then by its run. */
   workflows: Record<string, string>
