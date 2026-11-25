@@ -329,3 +329,60 @@ test('a workflow is one line with its stages still out under it', async ($, on) 
   await $.turn.complete(TURN)
   expect(toasts).toEqual(['orc handed off: cheap 1, strong 2, max 1'])
 })
+
+test('a swarm stays a few lines: counts per tier, stages summed', async ($, on) => {
+  let next = 0
+  on('command.register', () => ({ value: { command: 'orc-tree' } }))
+  on('skill.prompt', (_, e) => ({ text: e.text }))
+  on('tool.call', () => ({ result: {} }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('agent.spawn', () => ({ model: 'm', agentId: `a${(next += 1)}` }))
+
+  const band = async () => {
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    const text = (await ui.find({ type: 'Box' }))?.text ?? ''
+    await ui.unmount()
+
+    return text.replace(/\s+/g, ' ').trim()
+  }
+
+  await $.skill.prompt({ skill: 'orc', text: 'rules' })
+  await $.command.run({ command: 'orc-tree', args: '', ...RUN })
+  await $.tool.call({
+    tool: 'Workflow',
+    tool_use_id: 'w1',
+    script: "export const meta = { name: 'sweep-300-files' }",
+  })
+
+  // 300 stages out at once: every one is counted, none is dropped.
+  for (let i = 1; i <= 300; i += 1) {
+    await $.agent.spawn({
+      ...SPAWN,
+      tool_use_id: 'w1',
+      subagentType: i <= 200 ? 'orc:tier-fast' : 'orc:tier-max',
+      description: `file ${i}`,
+      workflow: { runId: 'wf_9', agentIndex: i },
+    })
+  }
+  expect(await band()).toBe(
+    [
+      '◆ orc fast 200 · max 100 ● 300 running',
+      '└─ ▶ workflow sweep-300-files 0 of 300 back',
+      '└─ ▶ fast 200 · max 100 running',
+    ].join(' '),
+  )
+
+  // As they come back the counts fall and the workflow's line keeps score.
+  for (let i = 1; i <= 297; i += 1) {
+    await $.turn.complete({ ...TURN, agentId: `a${i}` })
+  }
+  expect(await band()).toBe(
+    [
+      '◆ orc max 3 ● 3 running',
+      '└─ ▶ workflow sweep-300-files 297 of 300 back',
+      '├─ ▶ max file 298',
+      '├─ ▶ max file 299',
+      '└─ ▶ max file 300',
+    ].join(' '),
+  )
+})

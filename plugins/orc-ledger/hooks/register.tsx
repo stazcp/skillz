@@ -3,7 +3,7 @@ import type { Color, EngineInterface, Register } from 'claude-code'
 
 import type { Ledger, TreeAgent } from '../types'
 
-const EMPTY: Ledger = { turn: [], session: {}, agents: [], workflows: {} }
+const EMPTY: Ledger = { turn: [], session: {}, agents: [], names: {}, runs: {} }
 const ORCHESTRATOR = 'orc:orchestrator'
 const SKILLS = new Set(['orc', 'orc:orc'])
 const TIER = /^orc:tier-/
@@ -16,9 +16,14 @@ const PERSON = new Set(['composer', 'bridge', 'sdk'])
 const COMMAND = 'orc-tree'
 // The name a workflow script gives itself in its `meta` block.
 const META_NAME = /\bname:\s*['"`]([^'"`\n]{1,60})['"`]/
-// How many agents are remembered, and the most lines the tree draws.
-const KEPT = 80
+// The most lines the tree draws, and the most stages a workflow lists one by
+// one before it sums them per tier instead.
 const LINES = 12
+const LISTED = 5
+// Bounds on what is remembered, so a session of any length stays small. Only
+// agents that are out are kept, so the first is a guard, not a working limit.
+const AGENTS = 2000
+const RUNS = 50
 
 // Cheapest first, each in a theme colour so the row follows the person's theme.
 const TIERS: readonly (readonly [string, Color])[] = [
@@ -39,7 +44,7 @@ const isTreeOpen = atom(
   false,
 )
 const ledger = atom({ plugin: 'orc-ledger', key: 'ledger' } as const, EMPTY, {
-  shape: 'ledger-6',
+  shape: 'ledger-7',
 })
 
 const short = (type: string) => type.replace('orc:tier-', '')
@@ -60,17 +65,26 @@ const tally = (tiers: readonly string[]) =>
 
 /** The handoffs still out: tier agents the main conversation started. */
 const out = (l: Ledger) =>
-  l.agents.filter(
-    one => one.isRunning && one.parent === undefined && TIER.test(one.type),
-  )
+  l.agents.filter(one => one.parent === undefined && TIER.test(one.type))
+
+/** Agents per type in the order first seen: `strong 60 · max 40`. */
+const perType = (agents: readonly TreeAgent[]) => {
+  const counts = new Map<string, number>()
+  for (const one of agents) {
+    counts.set(short(one.type), (counts.get(short(one.type)) ?? 0) + 1)
+  }
+
+  return [...counts].map(([name, n]) => `${name} ${n}`).join(' · ')
+}
 
 /**
  * The tree's lines: only what is running now, parents before their children,
  * with the branch drawn. A workflow is one line saying how many of its stages
- * are back, with the stages still out under it.
+ * are back, with the stages still out under it: one by one while they are
+ * few, summed per tier when they are a swarm.
  */
 const lines = (l: Ledger) => {
-  const running = l.agents.filter(one => one.isRunning)
+  const running = l.agents
   const known = new Set(running.map(one => one.id))
   const drawn: Line[] = []
   const lineOf = (agent: TreeAgent, branch: string): Line => ({
@@ -107,14 +121,19 @@ const lines = (l: Ledger) => {
 
       return
     }
-    const stages = l.agents.filter(one => one.run === top)
-    const left = stages.filter(one => one.isRunning)
+    const left = running.filter(one => one.run === top && one.parent === undefined)
+    const run = l.runs[top]
     drawn.push({
       branch,
       name: 'workflow',
-      label: l.workflows[top] ?? '',
-      note: `${stages.length - left.length} of ${stages.length} back`,
+      label: run?.name ?? '',
+      note: run === undefined ? '' : `${run.back} of ${run.started} back`,
     })
+    if (left.length > LISTED) {
+      drawn.push({ branch: `${indent}└─`, name: '', label: perType(left), note: 'running' })
+
+      return
+    }
     left.forEach((agent, j) => {
       const isLastStage = j === left.length - 1
       drawn.push(lineOf(agent, `${indent}${isLastStage ? '└─' : '├─'}`))
@@ -125,18 +144,22 @@ const lines = (l: Ledger) => {
   return drawn
 }
 
-/** Marks one agent back; a second word about it changes nothing. */
+/** Takes out an agent that is back; a second word about it changes nothing. */
 const back = ($: EngineInterface, id: string) =>
-  update($, ledger, l =>
-    l.agents.some(one => one.id === id && one.isRunning)
-      ? {
-          ...l,
-          agents: l.agents.map(one =>
-            one.id === id ? { ...one, isRunning: false } : one,
-          ),
-        }
-      : l,
-  )
+  update($, ledger, l => {
+    const agent = l.agents.find(one => one.id === id)
+    if (agent === undefined) return l
+    const run = agent.run === undefined ? undefined : l.runs[agent.run]
+
+    return {
+      ...l,
+      agents: l.agents.filter(one => one.id !== id),
+      runs:
+        agent.run === undefined || run === undefined || agent.parent !== undefined
+          ? l.runs
+          : { ...l.runs, [agent.run]: { ...run, back: run.back + 1 } },
+    }
+  })
 
 // This mod only watches: every hook passes the event on unchanged, and one
 // that fails is skipped, so orc behaves the same with or without it.
@@ -202,7 +225,9 @@ export const register: Register = on => {
     const name = META_NAME.exec(e.script ?? '')?.[1] ?? e.name ?? 'workflow'
     await update($, ledger, l => ({
       ...l,
-      workflows: { ...l.workflows, [e.tool_use_id]: name },
+      names: Object.fromEntries(
+        Object.entries({ ...l.names, [e.tool_use_id]: name }).slice(-RUNS),
+      ),
     }))
 
     return next(e)
@@ -233,7 +258,6 @@ export const register: Register = on => {
       run,
       type,
       label: e.description,
-      isRunning: true,
     }
     // A tier dispatch means routing is on, however it was turned on.
     if (isHandoff) await update($, isOn, () => true)
@@ -244,11 +268,21 @@ export const register: Register = on => {
         isHandoff && !e.resume
           ? { ...l.session, [type]: (l.session[type] ?? 0) + 1 }
           : l.session,
-      agents: [...l.agents.filter(one => one.id !== id), agent].slice(-KEPT),
-      workflows:
-        run === undefined || l.workflows[run] !== undefined
-          ? l.workflows
-          : { ...l.workflows, [run]: l.workflows[e.tool_use_id] ?? '' },
+      agents: [...l.agents.filter(one => one.id !== id), agent].slice(-AGENTS),
+      names: l.names,
+      runs:
+        run === undefined || !isHandoff || e.resume
+          ? l.runs
+          : Object.fromEntries(
+              Object.entries({
+                ...l.runs,
+                [run]: {
+                  name: l.runs[run]?.name ?? l.names[e.tool_use_id] ?? '',
+                  started: (l.runs[run]?.started ?? 0) + 1,
+                  back: l.runs[run]?.back ?? 0,
+                },
+              }).slice(-RUNS),
+            ),
     }))
 
     return started
@@ -334,10 +368,13 @@ export const register: Register = on => {
             <Text>
               <Text dimColor>  {branch} </Text>
               <Text color="claude">▶ </Text>
-              <Text color={color} bold={color === undefined}>
-                {name}
-              </Text>
-              {text !== '' && <Text>  {text}</Text>}
+              {name !== '' && (
+                <Text color={color} bold={color === undefined}>
+                  {name}
+                  {'  '}
+                </Text>
+              )}
+              {text !== '' && <Text>{text}</Text>}
               {note !== '' && <Text dimColor>  {note}</Text>}
             </Text>
           )

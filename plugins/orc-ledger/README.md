@@ -36,6 +36,15 @@ still out listed under it:
 └─ ▶ cheap  Count the tests
 ```
 
+With more than five stages out at once, they are summed per tier instead of
+listed, so a swarm of hundreds is still three lines:
+
+```
+◆ orc  fast 200 · max 100  ● 300 running
+└─ ▶ workflow  sweep-300-files  0 of 300 back
+   └─ ▶ fast 200 · max 100  running
+```
+
 The session's totals are not on screen. `/orc-tree` answers with them each
 time you run it (`Handoffs so far: cheap 4, strong 2`).
 
