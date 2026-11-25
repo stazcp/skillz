@@ -83,8 +83,8 @@ test('the row follows orc and counts handoffs per tier', async ($, on) => {
   expect(await row()).toBe('◆ orc no handoffs yet')
 
   // Tier agents the main conversation starts are counted, cheapest first:
-  // not another plugin's agent, a tier agent's own child, a refused one, a
-  // teammate or a workflow stage.
+  // not another plugin's agent, a tier agent's own child, a refused one or a
+  // teammate.
   await $.agent.spawn({ ...SPAWN, subagentType: 'orc:tier-fast', model: 'opus' }) // a1
   await $.agent.spawn(SPAWN) // a2
   await $.agent.spawn(SPAWN) // a3
@@ -92,7 +92,6 @@ test('the row follows orc and counts handoffs per tier', async ($, on) => {
   await $.agent.spawn({ ...SPAWN, parentAgentId: 'a1' })
   await $.agent.spawn({ ...SPAWN, subagentType: 'orc:tier-bogus' })
   await $.agent.spawn({ ...SPAWN, isTeammate: true })
-  await $.agent.spawn({ ...SPAWN, workflow: { runId: 'wf_1', agentIndex: 1 } })
   for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
     expect(await row(surface)).toBe('◆ orc cheap 2 · fast 1 ● 3 running')
   }
@@ -118,7 +117,7 @@ test('the row follows orc and counts handoffs per tier', async ($, on) => {
   await $.turn.complete({ ...TURN, agentId: 'a1' })
   expect(toasts).toEqual([])
   await $.turn.complete(TURN)
-  expect(toasts).toEqual(['orc handed off: fast opus, cheap, cheap'])
+  expect(toasts).toEqual(['orc handed off: cheap 2, fast 1'])
 
   // Only "orc off" as the whole prompt hides the row; the count is kept.
   for (const text of [
@@ -242,4 +241,88 @@ test('a long tree shows its newest lines and says how many are above', async ($,
   expect(await ui.find({ type: 'Text', text: /task 7$/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /task 15/ })).toBeDefined()
   await ui.unmount()
+})
+
+test('a workflow is one line with its stages still out under it', async ($, on) => {
+  const clock = mock.clock(on)
+  const toasts: string[] = []
+  let next = 0
+  on('command.register', () => ({ value: { command: 'orc-tree' } }))
+  on('skill.prompt', (_, e) => ({ text: e.text }))
+  on('tool.call', () => ({ result: {} }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('agent.spawn', () => ({ model: 'm', agentId: `a${(next += 1)}` }))
+  on('ui.toast', (_, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+
+  const band = async () => {
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    const text = (await ui.find({ type: 'Box' }))?.text ?? ''
+    await ui.unmount()
+
+    return text.replace(/\s+/g, ' ').trim()
+  }
+  const stage = (agentIndex: number, subagentType: string, description: string) =>
+    $.agent.spawn({
+      ...SPAWN,
+      tool_use_id: 'w1',
+      subagentType,
+      description,
+      workflow: { runId: 'wf_1', agentIndex },
+    })
+
+  await $.skill.prompt({ skill: 'orc', text: 'rules' })
+  await $.command.run({ command: 'orc-tree', args: '', ...RUN })
+
+  // The run's name is read from the script the Workflow tool was handed.
+  await $.tool.call({
+    tool: 'Workflow',
+    tool_use_id: 'w1',
+    script: "export const meta = { name: 'triage-open-issues', description: 'x' }",
+  })
+  await stage(1, 'orc:tier-strong', 'investigate #332') // a1
+  await stage(2, 'orc:tier-strong', 'investigate #315') // a2
+  await stage(3, 'orc:tier-max', 'refute #332') // a3
+  await $.agent.spawn({ ...SPAWN, description: 'Count the tests' }) // a4
+
+  // Every stage is a handoff on its tier, and running until its turn ends.
+  expect(await band()).toBe(
+    [
+      '◆ orc cheap 1 · strong 2 · max 1 ● 4 running',
+      '├─ ▶ workflow triage-open-issues 0 of 3 back',
+      '│ ├─ ▶ strong investigate #332',
+      '│ ├─ ▶ strong investigate #315',
+      '│ └─ ▶ max refute #332',
+      '└─ ▶ cheap Count the tests',
+    ].join(' '),
+  )
+
+  // A stage sends no report: its own turn ending is what marks it back. A
+  // finished stage leaves the list and is counted on the workflow's line.
+  await clock.advance(30_000)
+  await $.turn.complete({ ...TURN, agentId: 'a1' })
+  await $.turn.complete({ ...TURN, agentId: 'a2', reason: 'error' })
+  expect(await band()).toBe(
+    [
+      '◆ orc cheap 1 · strong 2 · max 1 ● 2 running',
+      '├─ ▶ workflow triage-open-issues 1 of 3 back',
+      '│ ├─ ✖ strong investigate #315 30s',
+      '│ └─ ▶ max refute #332',
+      '└─ ▶ cheap Count the tests',
+    ].join(' '),
+  )
+
+  // An agent of its own is not marked back by its turn ending, only its report.
+  await $.turn.complete({ ...TURN, agentId: 'a4' })
+  expect(await band()).toMatch(/● 2 running/)
+
+  // With every stage back the workflow's line stands alone.
+  await $.turn.complete({ ...TURN, agentId: 'a3' })
+  expect(await band()).toMatch(/├─ ✖ workflow triage-open-issues 2 of 3 back │ └─ ✖ strong/)
+
+  // The main turn's note groups the handoffs by tier.
+  await $.turn.complete(TURN)
+  expect(toasts).toEqual(['orc handed off: cheap 1, strong 2, max 1'])
 })

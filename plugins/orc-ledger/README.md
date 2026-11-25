@@ -8,8 +8,8 @@ agents are still running:
 ◆ orc  cheap 5 · fast 3  ● 1 running
 ```
 
-After each turn that handed work off, it adds a one-line note naming the
-tiers used.
+After each turn that handed work off, it adds a one-line note with the
+handoffs per tier.
 
 `/orc-tree` opens a tree of the agents under the row, and the same command
 hides it again, so it takes no space until you want it:
@@ -22,9 +22,21 @@ hides it again, so it takes no space until you want it:
 └─ ✖ fast  Rename the flag  19s
 ```
 
-`▶` is running, `✔` reported back, `✖` failed or was stopped, with how long
-each took. Anything a tier agent starts is nested under it. The tree keeps the
-last 40 agents and draws the newest 12 lines.
+`▶` is running, `✔` is back, `✖` failed or was stopped, with how long each
+took. Anything a tier agent starts is nested under it.
+
+A workflow is one line saying how many of its stages are back, with only the
+stages still out, or failed, listed under it, so a run of twenty stays short:
+
+```
+◆ orc  cheap 1 · strong 2 · max 1  ● 2 running
+├─ ▶ workflow  triage-open-issues  1 of 3 back
+│  ├─ ✖ strong  investigate #315  30s
+│  └─ ▶ max  refute #332
+└─ ▶ cheap  Count the tests
+```
+
+The tree keeps the last 80 agents and draws the newest 12 lines.
 
 It only watches. It never blocks a tool call, never adds text the model
 reads, and changes nothing about how orc routes, so orc behaves the same
@@ -58,10 +70,10 @@ handoffs today") and the row stays until you send "orc off" by itself; a tier
 agent starting brings it back.
 
 Only agents the main conversation starts are counted, once each, when they
-have really started. A tier agent that fans out to other tiers does not add to
-the count (its agents show in the tree, nested under it), and neither does a
-dispatch that was refused. Workflow stages and teammates running on a tier are
-not counted, and are not in the tree.
+have really started; a workflow's stages on a tier count the same way. A tier
+agent that fans out to other tiers does not add to the count (its agents show
+in the tree, nested under it), and neither does a dispatch that was refused.
+Teammates running on a tier are not counted, and are not in the tree.
 
 ## Develop
 
