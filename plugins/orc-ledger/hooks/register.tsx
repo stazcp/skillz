@@ -68,6 +68,17 @@ const colorOf = (type: string): Color | undefined =>
 const isOrchestrator = async ($: EngineInterface) =>
   (await $.session.info()).agentType === ORCHESTRATOR
 
+/** How long something took, in the largest two units: `8s`, `3m 47s`, `1h 2m`. */
+const took = (seconds: number) => {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`
+  if (m > 0) return s > 0 ? `${m}m ${s}s` : `${m}m`
+
+  return `${s}s`
+}
+
 /** Handoffs per tier, cheapest first: `cheap 2, strong 1`. */
 const tally = (tiers: readonly string[]) =>
   TIERS.flatMap(([name]) => {
@@ -91,7 +102,7 @@ const lines = (l: Ledger) => {
     name: short(agent.type),
     color: colorOf(agent.type),
     label: agent.label,
-    time: agent.seconds === undefined ? '' : `${agent.seconds}s`,
+    time: agent.seconds === undefined ? '' : took(agent.seconds),
   })
   const walk = (parent: string, indent: string) => {
     const children = agents.filter(one => one.parent === parent)

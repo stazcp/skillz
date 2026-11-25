@@ -218,9 +218,17 @@ test('/orc-tree shows the agents as a tree under the row, and hides it', async (
   // Only the handoffs count in the row; the fan-out is in the tree alone.
   expect(squash(await band())).toMatch(/^◆ orc fast 1 · strong-wide 1 ● 1 running/)
 
+  // Past a minute a duration reads in minutes, and past an hour in hours.
+  await clock.advance(208_000)
+  await $.agent.report({ ...REPORT, agentId: 'a3' })
+  expect(squash(await band())).toMatch(/✔ Explore Search logs 3m 47s/)
+  await clock.advance(3_493_000)
+  await $.agent.report({ ...REPORT, agentId: 'a1' })
+  expect(squash(await band())).toMatch(/✔ strong-wide Fix the flaky test 1h 2m │/)
+
   // The same command hides it again, and the row is all that is left.
   expect((await tree()).text).toBe('orc tree hidden.')
-  expect(squash(await band())).toBe('◆ orc fast 1 · strong-wide 1 ● 1 running')
+  expect(squash(await band())).toBe('◆ orc fast 1 · strong-wide 1')
 })
 
 test('a long tree shows its newest lines and says how many are above', async ($, on) => {

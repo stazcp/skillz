@@ -31,7 +31,7 @@ stages still out, or failed, listed under it, so a run of twenty stays short:
 ```
 ◆ orc  cheap 1 · strong 2 · max 1  ● 2 running
 ├─ ▶ workflow  triage-open-issues  1 of 3 back
-│  ├─ ✖ strong  investigate #315  30s
+│  ├─ ✖ strong  investigate #315  3m 12s
 │  └─ ▶ max  refute #332
 └─ ▶ cheap  Count the tests
 ```
